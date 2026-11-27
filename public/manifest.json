@@ -1,0 +1,22 @@
+{
+  "short_name": "INBR",
+  "name": "INBR - International Breeds Registry",
+  "description": "Plataforma oficial del International Breeds Registry (INBR). Registro genealógico canino, verificación de microchip y pedigrí internacional.",
+  "icons": [
+    {
+      "src": "/logo-inbr.jpg",
+      "type": "image/jpeg",
+      "sizes": "192x192 512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0A0A0A",
+  "theme_color": "#0A0A0A",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "categories": ["business", "utilities", "reference"],
+  "lang": "es-MX",
+  "dir": "ltr",
+  "prefer_related_applications": false
+}

@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <!-- INBR Official Registry Homepage -->
+  <url>
+    <loc>https://inbr.org/</loc>
+    <lastmod>2026-10-18</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="es" href="https://inbr.org/?lang=es" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://inbr.org/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="pt" href="https://inbr.org/?lang=pt" />
+  </url>
+
+  <!-- Breeds Section (American Bully, Exotic Bull, Cane Corso, French Bulldog) -->
+  <url>
+    <loc>https://inbr.org/#razas</loc>
+    <lastmod>2026-10-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- Canine Verification Section (Microchip & Registration Lookup) -->
+  <url>
+    <loc>https://inbr.org/#verificacion</loc>
+    <lastmod>2026-10-18</lastmod>
+    <changefreq>always</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- Official Events Section (Conformation Shows & Cups) -->
+  <url>
+    <loc>https://inbr.org/#eventos</loc>
+    <lastmod>2026-10-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Online Forms and Formats (F1, Registro Permanente, Homologación) -->
+  <url>
+    <loc>https://inbr.org/#formularios</loc>
+    <lastmod>2026-10-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Certified Breeders Directory -->
+  <url>
+    <loc>https://inbr.org/#criadores</loc>
+    <lastmod>2026-10-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- Racial Standards Section -->
+  <url>
+    <loc>https://inbr.org/#estandares</loc>
+    <lastmod>2026-10-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- Official Certifications Section -->
+  <url>
+    <loc>https://inbr.org/#certificaciones</loc>
+    <lastmod>2026-10-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <!-- Official Photo Gallery -->
+  <url>
+    <loc>https://inbr.org/#galeria</loc>
+    <lastmod>2026-10-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <!-- Hall of Fame -->
+  <url>
+    <loc>https://inbr.org/#salon-fama</loc>
+    <lastmod>2026-10-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <!-- Contact & Global Offices -->
+  <url>
+    <loc>https://inbr.org/#contacto</loc>
+    <lastmod>2026-10-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+</urlset>

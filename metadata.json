@@ -1,0 +1,6 @@
+{
+  "name": "INBR - International Breeds Registry",
+  "description": "Plataforma oficial internacional para el registro canino de razas tipo Bull, verificación de microchips y pedigrí oficial, directorio de criadores y eventos mundiales.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
