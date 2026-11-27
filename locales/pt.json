@@ -1,0 +1,342 @@
+{
+  "nav": {
+    "bloodData": "Blood Data",
+    "about": "Quem Somos",
+    "cards": "Benefícios",
+    "team": "Nossa Equipe",
+    "breeds": "Raças Oficiais (Multi-Raças)",
+    "specialEdition": "Edição Especial",
+    "standards": "Padrões",
+    "breeders": "Criadores",
+    "events": "Próximos Eventos",
+    "champions": "Pontuações e Campeões",
+    "verification": "Verificação",
+    "hallOfFame": "Hall da Fama",
+    "liveLitter": "Ninhada ao Vivo",
+    "forms": "Formulários",
+    "certs": "Certificações",
+    "contact": "Fale Conosco",
+    "verifyBtn": "Verificar Registro",
+    "registerDogBtn": "Registrar Cão"
+  },
+  "hero": {
+    "badge": "Registro Genealógico Internacional Canino Oficial",
+    "titlePrefix": "INTERNATIONAL BREEDS REGISTRY",
+    "titleHighlight": "INBR OFICIAL",
+    "subtitle": "A plataforma global definitiva para preservação, validação de pedigree e verificação genética de raças tipo Bull. Garantia de pureza amparada por tecnologia criptográfica e padrões internacionais.",
+    "ctaVerify": "Verificar Registro ou Microchip",
+    "ctaRegister": "Registrar Exemplar F1",
+    "ctaCamada": "Registro de Ninhada ao Vivo",
+    "stats": {
+      "registered": "Registros Validados",
+      "champions": "Campeões Titulados",
+      "breeders": "Canis Certificados",
+      "countries": "Países Ativos"
+    },
+    "ticker": "ÚLTIMOS EXEMPLARES VALIDADOS NA REDE INTERNACIONAL INBR:"
+  },
+  "about": {
+    "badge": "Liderança & Pureza Racial",
+    "title": "QUEM SOMOS",
+    "subtitle": "O International Breeds Registry (INBR) é a entidade de referência continental e global dedicada ao registro rigoroso, certificação genealógica e fomento responsável de raças caninas.",
+    "missionTitle": "Nossa Missão",
+    "missionDesc": "Garantir a autenticidade genealógica mediante processos modernos de verificação, zelando pelo bem-estar animal e estabelecendo padrões raciais que valorizem a morfologia funcional e a saúde das raças tipo Bull.",
+    "visionTitle": "Nossa Visão",
+    "visionDesc": "Ser o cartório canino de maior prestígio e inovação tecnológica mundial, referência em transparência documental e exposições caninas de excelência, unindo criadores dos 5 continentes.",
+    "objectivesTitle": "Objetivos Estratégicos",
+    "obj1": "Validação 100% digital e imutável de genealogias e microchips com homologação global.",
+    "obj2": "Transparência plena em registros de ninhada através de vídeo ao vivo sem manipulação.",
+    "obj3": "Capacitação contínua de juízes, criadores e apresentadores sob diretrizes biomecânicas e de temperamento.",
+    "obj4": "Expansão de exposições de conformação com pontuação auditável em tempo real."
+  },
+  "threeCards": {
+    "card1Title": "Registro Internacional Oficial",
+    "card1Desc": "Certificados de pedigree com blindagem jurídica, QR code de validação instantânea e reconhecimento em mais de 28 países para criação e pistas de elite.",
+    "card2Title": "Certificações de Pureza & Pedigree",
+    "card2Desc": "Rastreabilidade de até 5 gerações com genograma fotográfico, homologação de registros externos (ABKC, UKC, FCI) e validação de DNA.",
+    "card3Title": "Respaldo Genético Global",
+    "card3Desc": "Auditoria de microchips ISO 11784/11785, banco de dados centralizado em nuvem Supabase e proteção total contra duplicidades ou falsificações."
+  },
+  "team": {
+    "badge": "Estrutura Organizacional",
+    "title": "NOSSA EQUIPE DIRETIVA",
+    "subtitle": "Profissionais e personalidades cinófilas comprometidas com a excelência do registro internacional.",
+    "executive": "Comitê Executivo",
+    "representatives": "Representantes Internacionais",
+    "judges": "Quadro de Juízes Oficiais INBR",
+    "judgesDesc": "Juízes credenciados para avaliar estrutura, conformação e temperamento em eventos oficiais INBR no mundo.",
+    "members": {
+      "jonathan": {
+        "name": "Jonathan Garcia",
+        "role": "CEO & Fundador",
+        "bio": "Líder com mais de 15 anos de trajetória na cinofilia internacional e preservação de linhagens Bull."
+      },
+      "mariana": {
+        "name": "Mariana Palma",
+        "role": "Vice-Presidente",
+        "bio": "Diretora de alianças estratégicas e supervisão de conformidade operacional global."
+      },
+      "nesto": {
+        "name": "MVZ Nesto Guerrero",
+        "role": "Diretor Veterinário",
+        "bio": "Médico Veterinário Zootecnista encarregado da sanidade, bem-estar e validação biométrica de microchips."
+      },
+      "tonny": {
+        "name": "Tonny Duran",
+        "role": "Subdiretor",
+        "bio": "Especialista em coordenação de grandes eventos, logística de pista e suporte aos criadores."
+      },
+      "chavid": {
+        "name": "Chavid Hidalgo",
+        "role": "Diretor Técnico",
+        "bio": "Auditor genético e supervisor de homologações internacionais de genealogia."
+      },
+      "robert": {
+        "name": "Robert Felix",
+        "role": "Diretor de Juízes",
+        "bio": "Juiz sênior com vasta trajetória em pistas dos Estados Unidos, México e América Latina."
+      },
+      "armando": {
+        "name": "Lic. Armando Gallegos",
+        "role": "Diretor Jurídico",
+        "bio": "Advogado corporativo responsável pela blindagem de propriedade intelectual e validade contratual do registro."
+      }
+    },
+    "reps": {
+      "mauro": {
+        "name": "Mauro Silva",
+        "country": "Equador",
+        "role": "Representante Oficial Equador"
+      },
+      "yordi": {
+        "name": "Yordi Supremacy",
+        "country": "Peru / Internacional",
+        "role": "Representante & Promotor Internacional"
+      },
+      "carlos": {
+        "name": "Carlos Otero",
+        "country": "Texas, EUA",
+        "role": "Representante Oficial EUA & Juiz"
+      }
+    }
+  },
+  "breeds": {
+    "badge": "Catálogo Oficial",
+    "title": "NOSSAS RAÇAS TIPO BULL",
+    "subtitle": "Reconhecimento e preservação das principais raças de porte pesado e companhia com padrões definidos.",
+    "viewStandard": "Ver Padrão Racial",
+    "varieties": "Variedades Aceitas"
+  },
+  "specialEdition": {
+    "badge": "Linhagens Exclusivas",
+    "title": "EDIÇÃO ESPECIAL INBR",
+    "subtitle": "Categorias modernas de alto impacto fenotípico e formato compacto selecionadas com total saúde e estrutura.",
+    "micro": "Micro Bully",
+    "microDesc": "Exemplares abaixo de 14 polegadas na cernelha com massa muscular densa, movimento fluído e proporções limpas.",
+    "cleanExotic": "Clean Exotic Bully",
+    "cleanExoticDesc": "A evolução exótica com garganta livre de barbelas excessivas, olhos desobstruídos e respiração plena.",
+    "extreme": "Extreme Pocket",
+    "extremeDesc": "Espessura óssea notável, tórax em barril e trem posterior potente mantendo agilidade e resistência.",
+    "nano": "Nano Bully",
+    "nanoDesc": "O ápice do porte ultra compacto, registrado sob rigorosos exames cardiológicos e radiológicos."
+  },
+  "standards": {
+    "badge": "Morfologia e Função",
+    "title": "PADRÕES RACIAIS OFICIAIS",
+    "subtitle": "Selecione a raça para consultar o manual oficial de julgamento e criação responsável.",
+    "sections": {
+      "head": "Cabeça e Crânio",
+      "bite": "Mordedura e Dentição",
+      "neck": "Pescoço e Ombros",
+      "body": "Corpo, Peito e Linha Superior",
+      "limbs": "Membros e Angulações",
+      "faults": "Faltas Desqualificantes"
+    }
+  },
+  "breeders": {
+    "badge": "Rede de Filiados",
+    "title": "DIRETÓRIO DE CRIADORES",
+    "subtitle": "Encontre canis éticos e certificados com garantia de pedigree oficial INBR na sua região.",
+    "searchPlaceholder": "Buscar por canil, raça, criador ou país...",
+    "filterAll": "Todos os Canis",
+    "verified": "Canil Verificado INBR",
+    "contactBtn": "Contatar via WhatsApp",
+    "viewKennel": "Ver Perfil do Canil"
+  },
+  "events": {
+    "badge": "Calendário Oficial",
+    "title": "PRÓXIMOS EVENTOS & EXPOSIÇÕES",
+    "subtitle": "Exposições de estrutura e beleza com juízes internacionais e pontuação para títulos de campeonato.",
+    "date": "Data",
+    "location": "Local",
+    "judges": "Juízes Designados",
+    "categories": "Categorias",
+    "registerDog": "Inscrever Cão na Exposição",
+    "spectators": "Informações ao Público"
+  },
+  "champions": {
+    "badge": "Quadro de Honra",
+    "title": "PONTUAÇÕES E CAMPEÕES INBR",
+    "subtitle": "Sistema de pontuação cumulativo e base de dados oficial dos exemplares consagrados em pista.",
+    "titles": {
+      "ch": "CH - Campeão INBR (100 pontos em pistas oficiais)",
+      "grch": "GR CH - Grande Campeão (3 vitórias Best in Show competindo contra outros campeões)",
+      "natch": "NAT CH - Campeão Nacional (Líder do ranking anual do país)",
+      "supreme": "SUPREME CH - Campeão Supremo (Maior honraria cinófila intercontinental)"
+    },
+    "table": {
+      "dog": "Exemplar",
+      "regNumber": "N° Registro",
+      "breed": "Raça",
+      "owner": "Proprietário / Canil",
+      "country": "País",
+      "points": "Pontos",
+      "titleEarned": "Título Oficial",
+      "searchPlaceholder": "Filtrar por nome, registro, raça ou canil..."
+    }
+  },
+  "verification": {
+    "badge": "Segurança Criptográfica",
+    "title": "VERIFICAÇÃO DE MICROCHIP E REGISTRO",
+    "subtitle": "Consulte em tempo real a validade jurídica e genealógica de qualquer cão cadastrado na base INBR.",
+    "inputPlaceholder": "Digite o N° de Registro (ex: INBR-84920) ou Microchip (15 dígitos)...",
+    "verifyBtn": "Validar na Base de Dados",
+    "sampleCodes": "Códigos de teste verificados:",
+    "successExact": "ESTE REGISTRO {reg} SÍ EXISTE Y ESTÁ VALIDADO POR INBR - PERTENECE AL EJEMPLAR: {dog}",
+    "notFound": "O registro ou microchip digitado não consta nos livros oficiais ativos. Por favor, verifique ou contate o suporte INBR.",
+    "details": {
+      "breed": "Raça Oficial",
+      "variety": "Variedade",
+      "sex": "Sexo",
+      "dob": "Data de Nascimento",
+      "microchip": "N° Microchip ISO",
+      "owner": "Proprietário Atual",
+      "breeder": "Canil de Origem",
+      "sire": "Pai (Sire)",
+      "dam": "Mãe (Dam)",
+      "status": "Status Jurídico",
+      "active": "ATIVO E VALIDADO",
+      "printCert": "Imprimir Certificado Digital",
+      "viewPedigree": "Ver Árvore Genealógica"
+    }
+  },
+  "hallOfFame": {
+    "badge": "Lendas das Pistas",
+    "title": "HALL DA FAMA INBR",
+    "subtitle": "Tributo aos exemplares históricos que definiram o ápice da genética e beleza na cinofilia moderna.",
+    "vulcan": {
+      "title": "KING VULCAN",
+      "subtitle": "Grande Campeão Supremo Multigeracional",
+      "breed": "American Bully Pocket",
+      "desc": "Reconhecido como detentor da cabeça e linha dorsal mais perfeita da década. Invicto em 14 exposições internacionais.",
+      "record": "14 Best in Show / 42 Melhor da Raça"
+    },
+    "bella": {
+      "title": "QUEEN BELLA",
+      "subtitle": "Campeã Mundial & Matriz de Ouro",
+      "breed": "Exotic Bully",
+      "desc": "A fêmea que redefiniu a classe exótica com estrutura atlética preservada e expressão fisionômica limpa.",
+      "record": "11 Best in Show / Produtora de 8 Campeões"
+    }
+  },
+  "liveLitter": {
+    "badge": "Transparência Total",
+    "title": "REGISTRO DE NINHADA AO VIVO GARANTIDO",
+    "subtitle": "Sistema exclusivo INBR com transmissão de câmera ao vivo sem envio de vídeos de galeria gravados. Comprovação real e instantânea da mãe e filhotes vivos.",
+    "instructions": "Para coibir fraudes na genealogia, o protocolo exige ativar a câmera do dispositivo e filmar a mãe amamentando ou ao lado de cada filhote por no mínimo 15 segundos.",
+    "cameraBtn": "Ativar Câmera do Dispositivo",
+    "startRec": "Iniciar Gravação ao Vivo",
+    "stopRec": "Encerrar Gravação",
+    "recording": "GRAVANDO AO VIVO...",
+    "preview": "Prévia do Vídeo Gravado em Tempo Real",
+    "saveToBucket": "Transmitir Vídeo ao Bucket Supabase (videos-camada)",
+    "litterData": {
+      "motherReg": "N° Registro da Mãe",
+      "fatherReg": "N° Registro do Pai",
+      "puppiesCount": "Total de Filhotes Nascidos",
+      "males": "Machos",
+      "females": "Fêmeas",
+      "birthDate": "Data de Parto",
+      "breederName": "Nome do Criador Responsável"
+    },
+    "uploadSuccess": "Vídeo da ninhada auditado e enviado com êxito para o bucket videos-camada! N° do Termo: INBR-CAM-",
+    "warning": "AVISO DE SEGURANÇA: O upload de vídeos da galeria do aparelho está desabilitado neste protocolo para garantir autenticidade ao vivo."
+  },
+  "forms": {
+    "badge": "Serviços Digitais",
+    "title": "REGISTRO E FORMULÁRIOS OFICIAIS",
+    "subtitle": "Emissão ágil de documentação canina com validade nacional e internacional.",
+    "tabF1": "Formulário Individual F1",
+    "tabHomologation": "Homologação Permanente",
+    "tabLitter": "Registro de Ninhada",
+    "tabGenogram": "Visualizador de Genograma",
+    "f1": {
+      "title": "Formulário Individual F1 (Registro Inicial)",
+      "desc": "Para cães sem pedigree anterior ou em processo de inspeção fenotípica perante juiz credenciado.",
+      "dogName": "Nome Oficial do Exemplar",
+      "breed": "Raça",
+      "variety": "Variedade (Pocket, Standard, XL, etc.)",
+      "gender": "Sexo",
+      "male": "Macho",
+      "female": "Fêmea",
+      "color": "Cor e Marcações",
+      "dob": "Data de Nascimento",
+      "microchip": "N° do Microchip (15 dígitos)",
+      "sire": "Nome / Registro do Pai",
+      "dam": "Nome / Registro da Mãe",
+      "ownerName": "Nome Completo do Proprietário",
+      "ownerEmail": "E-mail de Contato",
+      "ownerPhone": "Telefone / WhatsApp",
+      "ownerCity": "Cidade e País",
+      "submit": "Enviar Solicitação de Registro F1"
+    },
+    "homologation": {
+      "title": "Homologação Permanente de Pedigree",
+      "desc": "Transfira o pedigree do seu cão emitido por outros clubes (ABKC, UKC, FCI, IBC, etc.) para o sistema INBR.",
+      "originalReg": "Registro de Origem",
+      "originalClub": "Clube Emissor de Origem",
+      "dogName": "Nome do Cão no Pedigree",
+      "submit": "Solicitar Homologação Internacional"
+    },
+    "genogram": {
+      "title": "Genograma Genealógico Interativo (4 Gerações)",
+      "desc": "Verifique a pureza sanguínea, ancestrais consagrados e linhagens diretas de qualquer exemplar registrado.",
+      "gen1": "1ª Geração (Exemplar)",
+      "gen2": "2ª Geração (Pais)",
+      "gen3": "3ª Geração (Avós)",
+      "gen4": "4ª Geração (Bisavós)"
+    }
+  },
+  "certifications": {
+    "badge": "Selos de Autenticidade",
+    "title": "NOSSAS CERTIFICAÇÕES & SEGURANÇA",
+    "subtitle": "Tecnologia de ponta a favor da segurança documental canina.",
+    "cert1": "Microchip Padrão ISO 11784/11785 de 15 dígitos com leitura via radiofrequência (RFID).",
+    "cert2": "Código QR Criptográfico com assinatura digital validável em segundos por qualquer smartphone.",
+    "cert3": "Holograma Óptico de Segurança com microtexto anti-cópia e selo d'água INBR.",
+    "cert4": "Certificado em Papel Moeda de 220g com fibras reagentes a luz ultravioleta (UV) para remessas físicas."
+  },
+  "contact": {
+    "badge": "Atendimento Global",
+    "title": "FALE CONOSCO",
+    "subtitle": "Nossa sede internacional e oficiais de registro estão à disposição para lhe atender prontamente.",
+    "hq": "Sede Central Internacional",
+    "address": "Cancún, Quintana Roo, México",
+    "phone": "+52 9984996316",
+    "email": "inbr.oficial@gmail.com",
+    "whatsapp": "WhatsApp Oficial (+52 9984996316)",
+    "name": "Seu Nome Completo",
+    "yourEmail": "Seu E-mail",
+    "subject": "Assunto",
+    "message": "Sua Mensagem",
+    "send": "Enviar Mensagem",
+    "success": "Mensagem recebida com sucesso! Um oficial de registro entrará em contato em breve."
+  },
+  "footer": {
+    "rights": "Todos os direitos reservados. International Breeds Registry (INBR).",
+    "disclaimer": "Cartório canino privado internacional voltado à preservação genética e criação responsável.",
+    "privacy": "Aviso de Privacidade",
+    "terms": "Termos de Registro",
+    "bylaws": "Estatutos Oficiais"
+  }
+}

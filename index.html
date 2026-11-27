@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="es" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>INBR - International Breeds Registry | Registro Canino Oficial</title>
+    <meta name="description" content="Plataforma oficial del International Breeds Registry (INBR). Base de datos genética, verificación de microchip y registros caninos, estándares raciales, directorio de criadores y shows internacionales." />
+    <meta name="keywords" content="INBR, International Breeds Registry, registro canino, pedigrí, American Bully, Exotic Bully, Cane Corso, genealogía canina, verificación microchip, criadores certificados, registro de camadas, jueces caninos" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="author" content="International Breeds Registry (INBR)" />
+
+    <!-- OpenGraph Social Cards -->
+    <meta property="og:site_name" content="INBR - International Breeds Registry" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="INBR - International Breeds Registry | Registro Canino Oficial" />
+    <meta property="og:description" content="Registro internacional canino para razas tipo Bull, verificación de microchip, genealogía de 4 generaciones y eventos mundiales." />
+    <meta property="og:image" content="/logo-inbr.jpg" />
+    <meta property="og:locale" content="es_MX" />
+
+    <!-- Twitter / X Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="INBR - International Breeds Registry | Registro Canino Oficial" />
+    <meta name="twitter:description" content="Base de datos genética oficial, verificación de microchip, emisión de certificados y árbol genealógico." />
+    <meta name="twitter:image" content="/logo-inbr.jpg" />
+
+    <meta name="theme-color" content="#0A0A0A" />
+    <link rel="icon" type="image/jpeg" href="/logo-inbr.jpg" />
+    <link rel="apple-touch-icon" href="/logo-inbr.jpg" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Cinzel+Decorative:wght@700;900&family=Great+Vibes&family=Pinyon+Script&family=Montserrat:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+
+    <!-- Schema.org Structured Data (JSON-LD) for Google Search Rich Snippets -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://inbr.org/#organization",
+          "name": "International Breeds Registry",
+          "alternateName": "INBR",
+          "description": "Registro Canino Internacional, verificación de microchip, genealogía notariada y emisión de certificados oficiales.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "/logo-inbr.jpg"
+          },
+          "founder": {
+            "@type": "Person",
+            "name": "Jonathan García",
+            "jobTitle": "CEO & Fundador"
+          },
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "contactType": "Customer Service",
+            "areaServed": ["MX", "US", "EC", "PE", "ES", "CO"],
+            "availableLanguage": ["Spanish", "English"]
+          }
+        },
+        {
+          "@type": "WebApplication",
+          "@id": "https://inbr.org/#app",
+          "name": "INBR Canine Registry Cloud",
+          "applicationCategory": "DatabaseApplication",
+          "operatingSystem": "All",
+          "browserRequirements": "Requires JavaScript. Requires HTML5.",
+          "description": "Plataforma oficial en línea para verificación de microchip, consulta de genealogía de 4 generaciones y trámites de registro de camadas para criadores y propietarios.",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          }
+        }
+      ]
+    }
+    </script>
+  </head>
+  <body class="bg-[#0A0A0A] text-neutral-100 antialiased selection:bg-[#C9A86A]/30 selection:text-[#F3E5AB]">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/service-worker.js')
+            .then((registration) => {
+              console.log('INBR Service Worker registrado con éxito:', registration.scope);
+            })
+            .catch((err) => {
+              console.warn('Fallo registro de Service Worker:', err);
+            });
+        });
+      }
+    </script>
+  </body>
+</html>
+
