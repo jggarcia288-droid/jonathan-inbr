@@ -1915,7 +1915,9 @@ export const PedigreeCertificateModal: React.FC<PedigreeCertificateModalProps> =
                         {pedigree.g3.map((anc, idx) => (
                           <div key={idx} className={idx === 4 ? `pt-1 border-t ${hideTreeBorders ? 'border-transparent' : 'border-neutral-200'}` : ''}>
                             <strong className="text-neutral-900 block font-bold truncate">{anc.name}</strong>
-                            <span className="text-neutral-500 text-[8px] block truncate">{anc.color}</span>
+                            <span className="text-neutral-500 text-[8px] block truncate">
+                              {anc.regNumber && anc.regNumber !== '—' ? `${anc.regNumber} · ` : ''}{anc.color}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -1929,7 +1931,9 @@ export const PedigreeCertificateModal: React.FC<PedigreeCertificateModalProps> =
                         {pedigree.g4.map((anc, idx) => (
                           <div key={idx} className={`flex items-center justify-between border-b ${hideTreeBorders ? 'border-transparent' : 'border-neutral-100'} pb-0.5`}>
                             <strong className="text-neutral-800 truncate font-mono text-[8px]">{anc.name}</strong>
-                            <span className="text-neutral-400 text-[7px] font-mono shrink-0 ml-1">{anc.color}</span>
+                            <span className="text-neutral-400 text-[7px] font-mono shrink-0 ml-1">
+                              {anc.regNumber && anc.regNumber !== '—' ? anc.regNumber : anc.color}
+                            </span>
                           </div>
                         ))}
                       </div>

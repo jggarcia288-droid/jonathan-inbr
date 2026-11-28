@@ -6,6 +6,7 @@ import { DogRecord } from '../data/registryData';
 import { getBreedImageByIdOrName } from '../utils/breedImages';
 import { buildEightGenPedigree, EightGenPedigree } from '../utils/pedigreeResolver';
 import { InteractivePedigreeTree } from './InteractivePedigreeTree';
+import { AncestorAutocompleteInput } from './AncestorAutocompleteInput';
 import { 
   HomologationPedigreeBuilder, 
   HomologationPedigreeData, 
@@ -303,6 +304,22 @@ export const FormsAndGenogramSection: React.FC<FormsAndGenogramSectionProps> = (
       titles: [],
       imageUrl: getBreedImageByIdOrName(builderData.breed || ''),
       status: 'ACTIVE_VALIDATED',
+      genogram: {
+        sire: {
+          name: builderData.sire || 'SIN REGISTRO',
+          reg: builderData.sireReg || '—',
+          titles: [],
+          sire: { name: builderData.sireSire || 'SIN REGISTRO', reg: '—', titles: [], sire: 'SIN REGISTRO', dam: 'SIN REGISTRO' },
+          dam: { name: builderData.sireDam || 'SIN REGISTRO', reg: '—', titles: [], sire: 'SIN REGISTRO', dam: 'SIN REGISTRO' },
+        },
+        dam: {
+          name: builderData.dam || 'SIN REGISTRO',
+          reg: builderData.damReg || '—',
+          titles: [],
+          sire: { name: builderData.damSire || 'SIN REGISTRO', reg: '—', titles: [], sire: 'SIN REGISTRO', dam: 'SIN REGISTRO' },
+          dam: { name: builderData.damDam || 'SIN REGISTRO', reg: '—', titles: [], sire: 'SIN REGISTRO', dam: 'SIN REGISTRO' },
+        },
+      },
     };
   }, [builderData]);
 
@@ -2711,22 +2728,40 @@ export const FormsAndGenogramSection: React.FC<FormsAndGenogramSectionProps> = (
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-[#FFE885] mb-1">Padre (Sire)</label>
-                      <input
-                        type="text"
-                        value={builderData.sire}
-                        onChange={(e) => setBuilderData({ ...builderData, sire: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl bg-[#080808] border border-neutral-700 text-xs text-white"
+                    <div className="space-y-2">
+                      <AncestorAutocompleteInput
+                        label="Padre (Sire)"
+                        value={builderData.sire === 'SIN REGISTRO' ? '' : builderData.sire}
+                        genderFilter="MACHO"
+                        placeholder="Busca por nombre o folio INBR del padre..."
+                        onChange={(val) => setBuilderData((prev) => ({ ...prev, sire: val || 'SIN REGISTRO', sireReg: '—' }))}
+                        onSelectAncestor={(anc) =>
+                          setBuilderData((prev) => ({
+                            ...prev,
+                            sire: anc.name,
+                            sireReg: anc.regNumber,
+                            sireSire: anc.sire || prev.sireSire,
+                            sireDam: anc.dam || prev.sireDam,
+                          }))
+                        }
                       />
                     </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-[#FFE885] mb-1">Madre (Dam)</label>
-                      <input
-                        type="text"
-                        value={builderData.dam}
-                        onChange={(e) => setBuilderData({ ...builderData, dam: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl bg-[#080808] border border-neutral-700 text-xs text-white"
+                    <div className="space-y-2">
+                      <AncestorAutocompleteInput
+                        label="Madre (Dam)"
+                        value={builderData.dam === 'SIN REGISTRO' ? '' : builderData.dam}
+                        genderFilter="HEMBRA"
+                        placeholder="Busca por nombre o folio INBR de la madre..."
+                        onChange={(val) => setBuilderData((prev) => ({ ...prev, dam: val || 'SIN REGISTRO', damReg: '—' }))}
+                        onSelectAncestor={(anc) =>
+                          setBuilderData((prev) => ({
+                            ...prev,
+                            dam: anc.name,
+                            damReg: anc.regNumber,
+                            damSire: anc.sire || prev.damSire,
+                            damDam: anc.dam || prev.damDam,
+                          }))
+                        }
                       />
                     </div>
                   </div>

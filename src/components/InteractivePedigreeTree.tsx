@@ -2,29 +2,23 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { DogRecord } from '../data/registryData';
 import { useRegistry } from '../context/RegistryContext';
 import { buildEightGenPedigree, EightGenPedigree } from '../utils/pedigreeResolver';
-import { 
-  Dna, 
-  Search, 
-  ZoomIn, 
-  ZoomOut, 
-  Maximize2, 
-  Minimize2, 
-  RotateCcw, 
-  ChevronRight, 
-  ChevronDown, 
-  Sparkles, 
-  ShieldCheck, 
-  Award, 
-  Copy, 
-  Check, 
-  ExternalLink, 
-  ArrowLeftRight, 
-  Layers, 
-  Download, 
-  Info, 
+import {
+  Dna,
+  Search,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  Minimize2,
+  RotateCcw,
+  Sparkles,
+  ShieldCheck,
+  Copy,
+  Check,
+  ArrowLeftRight,
+  Download,
   X,
   Compass,
-  CornerDownRight
+  ArrowLeft,
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 
@@ -65,9 +59,18 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
 }) => {
   const { dogs: allDogs } = useRegistry();
 
-  // Navigation & Canvas State - Set initial zoom to 0.72 so all 4 generations fit immediately
-  const [zoom, setZoom] = useState<number>(0.72);
-  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 15, y: 0 });
+  // Active root dog (supports internal backward navigation to inspect any ancestor's 4G tree)
+  const [activeDog, setActiveDog] = useState<DogRecord>(dog);
+
+  useEffect(() => {
+    setActiveDog(dog);
+    setSelectedNode(null);
+    setCollapsedIds(new Set());
+  }, [dog]);
+
+  // Navigation & Canvas State
+  const [zoom, setZoom] = useState<number>(0.62);
+  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 16, y: 16 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
@@ -80,13 +83,14 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
   const [isExporting, setIsExporting] = useState<boolean>(false);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
   const treeCanvasRef = useRef<HTMLDivElement | null>(null);
+  const treeContentRef = useRef<HTMLDivElement | null>(null);
 
   // Build Hierarchical 4-Generation Tree strictly from resolved lineage
   const rootNode = useMemo<PedigreeTreeNode>(() => {
-    const rawPedigree: EightGenPedigree = buildEightGenPedigree(dog, allDogs);
+    const rawPedigree: EightGenPedigree = buildEightGenPedigree(activeDog, allDogs);
 
-    // Gen 4 nodes builder helper
     const buildG4Node = (
       id: string,
       idx: number,
@@ -100,7 +104,7 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
         name: matched?.name || g4Item.name,
         regNumber: matched?.regNumber || g4Item.regNumber,
         color: matched?.color || g4Item.color || 'Por registrar',
-        breed: matched?.breed || g4Item.breed || dog.breed,
+        breed: matched?.breed || g4Item.breed || activeDog.breed,
         titles: matched?.titles || g4Item.titles || [],
         gender,
         roleLabel: gender === 'Macho' ? 'Tatarabuelo' : 'Tatarabuela',
@@ -114,7 +118,6 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
       };
     };
 
-    // Gen 3 nodes builder helper
     const buildG3Node = (
       id: string,
       idx: number,
@@ -129,7 +132,7 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
         name: matched?.name || g3Item.name,
         regNumber: matched?.regNumber || g3Item.regNumber,
         color: matched?.color || g3Item.color || 'Por registrar',
-        breed: matched?.breed || g3Item.breed || dog.breed,
+        breed: matched?.breed || g3Item.breed || activeDog.breed,
         titles: matched?.titles || g3Item.titles || [],
         gender,
         roleLabel: gender === 'Macho' ? 'Bisabuelo' : 'Bisabuela',
@@ -140,8 +143,8 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
         microchip: matched?.microchip,
         owner: matched?.owner,
         dogRecord: matched,
-        sire: buildG4Node(`${id}-s`, g4StartIdx, 'Macho', lineage),
-        dam: buildG4Node(`${id}-d`, g4StartIdx + 1, 'Hembra', lineage),
+        sire: buildG4Node(`${id}s`, g4StartIdx, 'Macho', lineage),
+        dam: buildG4Node(`${id}d`, g4StartIdx + 1, 'Hembra', lineage),
       };
     };
 
@@ -152,7 +155,7 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
       name: ssMatched?.name || rawPedigree.sireSire.name,
       regNumber: ssMatched?.regNumber || rawPedigree.sireSire.regNumber,
       color: ssMatched?.color || rawPedigree.sireSire.color || 'Por registrar',
-      breed: ssMatched?.breed || rawPedigree.sireSire.breed || dog.breed,
+      breed: ssMatched?.breed || rawPedigree.sireSire.breed || activeDog.breed,
       titles: ssMatched?.titles || rawPedigree.sireSire.titles || [],
       gender: 'Macho',
       roleLabel: 'Abuelo Paterno',
@@ -173,7 +176,7 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
       name: sdMatched?.name || rawPedigree.sireDam.name,
       regNumber: sdMatched?.regNumber || rawPedigree.sireDam.regNumber,
       color: sdMatched?.color || rawPedigree.sireDam.color || 'Por registrar',
-      breed: sdMatched?.breed || rawPedigree.sireDam.breed || dog.breed,
+      breed: sdMatched?.breed || rawPedigree.sireDam.breed || activeDog.breed,
       titles: sdMatched?.titles || rawPedigree.sireDam.titles || [],
       gender: 'Hembra',
       roleLabel: 'Abuela Paterna',
@@ -194,7 +197,7 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
       name: dsMatched?.name || rawPedigree.damSire.name,
       regNumber: dsMatched?.regNumber || rawPedigree.damSire.regNumber,
       color: dsMatched?.color || rawPedigree.damSire.color || 'Por registrar',
-      breed: dsMatched?.breed || rawPedigree.damSire.breed || dog.breed,
+      breed: dsMatched?.breed || rawPedigree.damSire.breed || activeDog.breed,
       titles: dsMatched?.titles || rawPedigree.damSire.titles || [],
       gender: 'Macho',
       roleLabel: 'Abuelo Materno',
@@ -215,7 +218,7 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
       name: ddMatched?.name || rawPedigree.damDam.name,
       regNumber: ddMatched?.regNumber || rawPedigree.damDam.regNumber,
       color: ddMatched?.color || rawPedigree.damDam.color || 'Por registrar',
-      breed: ddMatched?.breed || rawPedigree.damDam.breed || dog.breed,
+      breed: ddMatched?.breed || rawPedigree.damDam.breed || activeDog.breed,
       titles: ddMatched?.titles || rawPedigree.damDam.titles || [],
       gender: 'Hembra',
       roleLabel: 'Abuela Materna',
@@ -237,7 +240,7 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
       name: sireMatched?.name || rawPedigree.sire.name,
       regNumber: sireMatched?.regNumber || rawPedigree.sire.regNumber,
       color: sireMatched?.color || rawPedigree.sire.color || 'Por registrar',
-      breed: sireMatched?.breed || rawPedigree.sire.breed || dog.breed,
+      breed: sireMatched?.breed || rawPedigree.sire.breed || activeDog.breed,
       titles: sireMatched?.titles || rawPedigree.sire.titles || [],
       gender: 'Macho',
       roleLabel: 'Padre (Sire)',
@@ -258,7 +261,7 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
       name: damMatched?.name || rawPedigree.dam.name,
       regNumber: damMatched?.regNumber || rawPedigree.dam.regNumber,
       color: damMatched?.color || rawPedigree.dam.color || 'Por registrar',
-      breed: damMatched?.breed || rawPedigree.dam.breed || dog.breed,
+      breed: damMatched?.breed || rawPedigree.dam.breed || activeDog.breed,
       titles: damMatched?.titles || rawPedigree.dam.titles || [],
       gender: 'Hembra',
       roleLabel: 'Madre (Dam)',
@@ -276,24 +279,43 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
     // Gen 0 Root Proband
     return {
       id: 'root',
-      name: dog.name,
-      regNumber: dog.regNumber,
-      color: dog.color,
-      breed: dog.breed,
-      titles: dog.titles,
-      gender: (dog.gender?.toLowerCase().includes('h') ? 'Hembra' : 'Macho') as any,
+      name: activeDog.name,
+      regNumber: activeDog.regNumber,
+      color: activeDog.color,
+      breed: activeDog.breed,
+      titles: activeDog.titles,
+      gender: (activeDog.gender?.toLowerCase().includes('h') ? 'Hembra' : 'Macho') as 'Macho' | 'Hembra',
       roleLabel: 'Ejemplar Registrado (Proband)',
       generation: 0,
       geneticPct: 100,
       lineage: 'ROOT',
-      imageUrl: dog.imageUrl,
-      microchip: dog.microchip,
-      owner: dog.owner,
-      dogRecord: dog,
+      imageUrl: activeDog.imageUrl,
+      microchip: activeDog.microchip,
+      owner: activeDog.owner,
+      dogRecord: activeDog,
       sire: nodeSire,
       dam: nodeDam,
     };
-  }, [dog, allDogs]);
+  }, [activeDog, allDogs]);
+
+  // Real ancestor count across G1-G4
+  const verifiedAncestorsCount = useMemo(() => {
+    let count = 0;
+    const isFilled = (n?: PedigreeTreeNode) => Boolean(n && n.name && n.name !== 'SIN REGISTRO');
+    const walk = (n?: PedigreeTreeNode) => {
+      if (!n) return;
+      if (n.generation >= 1 && n.generation <= 4 && isFilled(n)) {
+        count++;
+      }
+      if (n.generation < 4) {
+        walk(n.sire);
+        walk(n.dam);
+      }
+    };
+    walk(rootNode.sire);
+    walk(rootNode.dam);
+    return count;
+  }, [rootNode]);
 
   // Compute Active Highlight Ancestor Path IDs
   const activePathIds = useMemo<Set<string>>(() => {
@@ -303,17 +325,10 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
     const ids = new Set<string>();
     ids.add('root');
 
-    // Simple prefix check since IDs follow hierarchy ('s', 'ss', 'sss', 'ssss', etc.)
-    if (targetId.startsWith('s')) {
-      ids.add('s');
-      if (targetId.length >= 2) ids.add(targetId.slice(0, 2));
-      if (targetId.length >= 3) ids.add(targetId.slice(0, 3));
-      if (targetId.length >= 4) ids.add(targetId.slice(0, 4));
-    } else if (targetId.startsWith('d')) {
-      ids.add('d');
-      if (targetId.length >= 2) ids.add(targetId.slice(0, 2));
-      if (targetId.length >= 3) ids.add(targetId.slice(0, 3));
-      if (targetId.length >= 4) ids.add(targetId.slice(0, 4));
+    if (targetId.startsWith('s') || targetId.startsWith('d')) {
+      for (let len = 1; len <= Math.min(4, targetId.length); len++) {
+        ids.add(targetId.slice(0, len));
+      }
     }
 
     ids.add(targetId);
@@ -344,20 +359,51 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
     return matched;
   }, [searchQuery, rootNode]);
 
-  // Auto-detect mobile screen on mount to fit full 4 generations comfortably
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const isMobile = window.innerWidth < 768;
-      if (isMobile) {
-        setZoom(0.50);
-        setPan({ x: 5, y: 0 });
-      }
-    }
+  // Fit entire 4-generation tree comfortably inside viewport without clipping G3/G4
+  const fitTreeToViewport = useCallback(() => {
+    const vp = viewportRef.current;
+    const content = treeContentRef.current;
+    if (!vp || !content) return;
+
+    const vw = vp.clientWidth;
+    const vh = vp.clientHeight;
+    const cw = content.scrollWidth;
+    const ch = content.scrollHeight;
+    if (!vw || !vh || !cw || !ch) return;
+
+    const padX = vw < 640 ? 16 : 36;
+    const padY = vw < 640 ? 28 : 36;
+    const rawFit = Math.min((vw - padX) / cw, (vh - padY) / ch);
+    const fitZoom = Math.max(0.24, Math.min(0.95, rawFit));
+
+    const scaledW = cw * fitZoom;
+    const scaledH = ch * fitZoom;
+    const nextX = Math.max(8, Math.round((vw - scaledW) / 2));
+    const nextY = Math.max(24, Math.round((vh - scaledH) / 2));
+
+    setZoom(fitZoom);
+    setPan({ x: nextX, y: nextY });
   }, []);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      fitTreeToViewport();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [activeDog, maxGenerations, isFullscreen, collapsedIds, fitTreeToViewport]);
+
+  useEffect(() => {
+    const vp = viewportRef.current;
+    if (!vp || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      fitTreeToViewport();
+    });
+    observer.observe(vp);
+    return () => observer.disconnect();
+  }, [fitTreeToViewport]);
 
   // Handle Drag / Pan Events (Mouse)
   const handleMouseDown = (e: React.MouseEvent) => {
-    // Only drag when clicking background canvas
     if ((e.target as HTMLElement).closest('.interactive-tree-card')) return;
     setIsDragging(true);
     setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
@@ -409,7 +455,7 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
       );
       const diff = dist - touchPinchDist;
       if (Math.abs(diff) > 3) {
-        setZoom((z) => Math.min(1.8, Math.max(0.35, z + (diff > 0 ? 0.025 : -0.025))));
+        setZoom((z) => Math.min(1.8, Math.max(0.24, z + (diff > 0 ? 0.025 : -0.025))));
         setTouchPinchDist(dist);
       }
     }
@@ -422,15 +468,9 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
 
   // Zoom handlers
   const handleZoomIn = () => setZoom((z) => Math.min(1.8, z + 0.12));
-  const handleZoomOut = () => setZoom((z) => Math.max(0.35, z - 0.12));
+  const handleZoomOut = () => setZoom((z) => Math.max(0.24, z - 0.12));
   const handleResetView = () => {
-    if (typeof window !== 'undefined' && window.innerWidth < 768) {
-      setZoom(0.50);
-      setPan({ x: 5, y: 0 });
-    } else {
-      setZoom(0.75);
-      setPan({ x: 20, y: 0 });
-    }
+    fitTreeToViewport();
   };
 
   // Toggle Collapse on Branch
@@ -462,32 +502,35 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
     setTimeout(() => setCopiedText(null), 2000);
   };
 
-  // Export Tree as Image
+  // Export Full 4G Tree as Unclipped PNG Image
   const handleExportTreeImage = async () => {
-    if (!treeCanvasRef.current || isExporting) return;
+    if (!treeContentRef.current || isExporting) return;
     setIsExporting(true);
     try {
       const originalZoom = zoom;
       const originalPan = pan;
-      // Temporarily set clean transform for capture
       setZoom(1);
       setPan({ x: 0, y: 0 });
 
-      await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => setTimeout(r, 180));
 
-      const canvas = await html2canvas(treeCanvasRef.current, {
+      const targetEl = treeContentRef.current;
+      const canvas = await html2canvas(targetEl, {
         backgroundColor: '#070707',
         scale: 2,
+        width: targetEl.scrollWidth,
+        height: targetEl.scrollHeight,
+        windowWidth: targetEl.scrollWidth,
+        windowHeight: targetEl.scrollHeight,
         useCORS: true,
         logging: false,
       });
 
-      // Restore zoom
       setZoom(originalZoom);
       setPan(originalPan);
 
       const link = document.createElement('a');
-      link.download = `INBR_Arbol_Genealogico_${dog.regNumber || 'Canino'}.png`;
+      link.download = `INBR_Arbol_Genealogico_4G_${activeDog.regNumber || 'Canino'}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
     } catch (err) {
@@ -500,94 +543,103 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
   // Render a Single Ancestor Card
   const renderNodeCard = (node: PedigreeTreeNode, hasParents: boolean) => {
     const isSelected = selectedNode?.id === node.id;
-    const isHovered = hoveredNodeId === node.id;
     const isHighlighted = activePathIds.has(node.id);
     const isMatched = searchMatches.has(node.id);
     const isCollapsed = collapsedIds.has(node.id);
     const isRoot = node.generation === 0;
+    const isEmpty = node.name === 'SIN REGISTRO';
 
     const isSire = node.gender === 'Macho';
     const borderAccent = isRoot
       ? 'border-[#D4AF37] shadow-[0_0_20px_rgba(212,175,55,0.4)]'
+      : isEmpty
+      ? isSire
+        ? 'border-blue-500/20 border-dashed opacity-55 hover:opacity-85'
+        : 'border-rose-500/20 border-dashed opacity-55 hover:opacity-85'
       : isSire
       ? isHighlighted
-        ? 'border-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.4)]'
-        : 'border-blue-500/30 hover:border-blue-400'
+        ? 'border-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.45)]'
+        : 'border-blue-500/45 hover:border-blue-400'
       : isHighlighted
-      ? 'border-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.4)]'
-      : 'border-rose-500/30 hover:border-rose-400';
+      ? 'border-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.45)]'
+      : 'border-rose-500/45 hover:border-rose-400';
 
     const bgGradient = isRoot
       ? 'bg-gradient-to-r from-[#1E170A] via-[#141007] to-[#1E170A]'
+      : isEmpty
+      ? 'bg-[#09090B]'
       : isSire
       ? 'bg-gradient-to-r from-[#0D1524] to-[#0A0D14]'
       : 'bg-gradient-to-r from-[#210D15] to-[#120A0E]';
 
+    const cardWidth = node.generation === 4 ? 195 : node.generation === 3 ? 215 : 245;
+    const cardMinHeight = node.generation === 4 ? 68 : node.generation === 3 ? 78 : 92;
+
     return (
       <div
-        className={`interactive-tree-card relative rounded-2xl p-3 border-2 transition-all cursor-pointer ${bgGradient} ${borderAccent} ${
+        className={`interactive-tree-card relative rounded-2xl p-2.5 border-2 transition-all cursor-pointer ${bgGradient} ${borderAccent} ${
           isMatched ? 'ring-2 ring-[#FFE885] scale-105' : ''
         } ${isSelected ? 'ring-2 ring-white scale-102' : ''}`}
         onClick={() => setSelectedNode(node)}
         onMouseEnter={() => setHoveredNodeId(node.id)}
         onMouseLeave={() => setHoveredNodeId(null)}
         style={{
-          width: node.generation === 4 ? 175 : node.generation === 3 ? 210 : 250,
-          minHeight: node.generation === 4 ? 76 : 96,
+          width: cardWidth,
+          minHeight: cardMinHeight,
         }}
       >
         {/* Role & Generation Kicker */}
-        <div className="flex items-center justify-between gap-1 mb-1.5">
-          <div className="flex items-center gap-1.5 text-[10px] text-neutral-400">
+        <div className="flex items-center justify-between gap-1 mb-1">
+          <div className="flex items-center gap-1 text-[9.5px] text-neutral-400 truncate">
             <span className={`font-bold ${isSire ? 'text-blue-400' : isRoot ? 'text-[#FFE885]' : 'text-rose-400'}`}>
               {node.roleLabel}
             </span>
             <span aria-hidden="true">·</span>
-            <span className="font-mono text-neutral-400">Gen {node.generation}</span>
+            <span className="font-mono text-neutral-500">G{node.generation}</span>
           </div>
 
-          <span className="text-[9px] font-mono font-bold text-[#FFE885] bg-black/60 px-1.5 py-0.2 rounded border border-[#D4AF37]/30">
-            {node.geneticPct}% ADN
+          <span className="text-[8.5px] font-mono font-bold text-[#FFE885] bg-black/60 px-1.5 py-0.2 rounded border border-[#D4AF37]/30 shrink-0">
+            {node.geneticPct}%
           </span>
         </div>
 
         {/* Canine Name & Photo / Avatar */}
-        <div className="flex items-start gap-2.5">
+        <div className="flex items-start gap-2">
           {node.imageUrl ? (
             <img
               src={node.imageUrl}
               alt={node.name}
-              className="w-10 h-10 rounded-lg object-cover border border-[#D4AF37]/50 shrink-0 shadow"
+              className="w-8 h-8 rounded-lg object-cover border border-[#D4AF37]/50 shrink-0 shadow"
             />
           ) : (
             <div
-              className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border ${
+              className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${
                 isSire ? 'bg-blue-950/60 border-blue-500/40 text-blue-300' : 'bg-rose-950/60 border-rose-500/40 text-rose-300'
               }`}
             >
-              <Dna className="w-4 h-4" />
+              <Dna className="w-3.5 h-3.5" />
             </div>
           )}
 
           <div className="flex-1 min-w-0 text-left">
             <div className="flex items-center gap-1">
-              <strong className="text-white text-xs font-bold font-serif-luxury truncate block leading-tight">
+              <strong className={`text-[11px] font-bold font-serif-luxury truncate block leading-tight ${isEmpty ? 'text-neutral-500' : 'text-white'}`}>
                 {node.name}
               </strong>
-              {node.titles && node.titles.length > 0 && (
+              {node.titles && node.titles.length > 0 && !isEmpty && (
                 <span className="text-[8px] font-black text-black bg-gold-gradient px-1 rounded shrink-0">
                   {node.titles[0]}
                 </span>
               )}
             </div>
 
-            <span className="text-[10px] font-mono text-[#FFE885] truncate block mt-0.5">
+            <span className={`text-[9.5px] font-mono truncate block mt-0.5 ${isEmpty ? 'text-neutral-600' : 'text-[#FFE885]'}`}>
               {node.regNumber}
             </span>
 
-            {node.color && (
-              <span className="text-[9px] text-[#FFE885] font-semibold truncate block mt-0.5">
-                Color: {node.color}
+            {node.color && !isEmpty && (
+              <span className="text-[8.5px] text-neutral-300 font-medium truncate block">
+                {node.color}
               </span>
             )}
           </div>
@@ -598,25 +650,25 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
           <button
             type="button"
             onClick={(e) => toggleCollapse(node.id, e)}
-            className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-[#18140B] border border-[#D4AF37] hover:bg-gold-gradient hover:text-black text-[#FFE885] flex items-center justify-center text-[10px] shadow-lg transition-transform hover:scale-110 z-10"
+            className="absolute -right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-[#18140B] border border-[#D4AF37] hover:bg-gold-gradient hover:text-black text-[#FFE885] flex items-center justify-center text-[10px] shadow-lg transition-transform hover:scale-110 z-10"
             title={isCollapsed ? 'Expandir ancestros de esta línea' : 'Colapsar ancestros'}
           >
             {isCollapsed ? '+' : '−'}
           </button>
         )}
 
-        {/* Collapsed Pill Indicator */}
+        {/* Collapsed Indicator */}
         {isCollapsed && hasParents && (
-          <div className="mt-2 pt-1 border-t border-neutral-800 flex items-center justify-between text-[9px] text-[#FFE885]">
-            <span>Línea anterior oculta</span>
-            <span className="font-mono">({node.generation === 1 ? '14' : node.generation === 2 ? '6' : '2'} ancestros)</span>
+          <div className="mt-1.5 pt-1 border-t border-neutral-800 flex items-center justify-between text-[8.5px] text-[#FFE885]">
+            <span>Línea oculta</span>
+            <span className="font-mono">({node.generation === 1 ? '14' : node.generation === 2 ? '6' : '2'})</span>
           </div>
         )}
       </div>
     );
   };
 
-  // Render Horizontal Branch Column for Tree
+  // Render Horizontal 4-Generation Column Tree
   const renderTreeBranches = () => {
     if (!rootNode) return null;
 
@@ -642,54 +694,76 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
       maxGenerations >= 4 &&
       (showSSS || showSSD || showSDS || showSDD || showDSS || showDSD || showDDS || showDDD);
 
+    const renderG4Pair = (
+      visible: boolean,
+      bisabueloNode?: PedigreeTreeNode,
+      accent: 'blue' | 'rose' = 'blue'
+    ) => {
+      if (!visible || !bisabueloNode) return null;
+      const borderCol = accent === 'blue' ? 'border-blue-800/40 bg-blue-950/15' : 'border-rose-800/40 bg-rose-950/15';
+      const labelCol = accent === 'blue' ? 'text-blue-300' : 'text-rose-300';
+      return (
+        <div className={`p-1.5 rounded-xl border ${borderCol} space-y-1`}>
+          <div className={`text-[8.5px] font-mono font-bold uppercase truncate px-1 ${labelCol}`}>
+            Padres de: {bisabueloNode.name}
+          </div>
+          <div className="flex items-center gap-1.5">
+            {bisabueloNode.sire && renderNodeCard(bisabueloNode.sire, false)}
+            {bisabueloNode.dam && renderNodeCard(bisabueloNode.dam, false)}
+          </div>
+        </div>
+      );
+    };
+
     return (
-      <div className="flex items-center gap-12 sm:gap-16 py-8 px-4 min-w-max select-none">
+      <div
+        ref={treeContentRef}
+        className="flex items-stretch gap-8 sm:gap-10 py-6 px-6 min-w-max select-none"
+      >
         {/* Col 0: Proband (Root) */}
         <div className="flex flex-col items-center justify-center shrink-0">
-          <div className="text-[10px] font-mono text-[#FFE885] font-bold uppercase mb-2">
-            PROBAND (EJEMPLAR RAÍZ)
+          <div className="text-[10px] font-mono text-[#FFE885] font-bold uppercase mb-2 tracking-wider">
+            RAÍZ · PROBAND (G0)
           </div>
           {renderNodeCard(rootNode, true)}
         </div>
 
         {/* Col 1: Parents (Sire & Dam) */}
         {maxGenerations >= 1 && (
-          <div className="flex flex-col justify-around gap-16 shrink-0 relative">
+          <div className="flex flex-col justify-around gap-12 shrink-0 relative">
             <div className="flex flex-col items-center">
-              <div className="text-[10px] font-mono text-blue-400 font-bold uppercase mb-2">
-                1. PADRE (SIRE)
+              <div className="text-[10px] font-mono text-blue-400 font-bold uppercase mb-2 tracking-wider">
+                GEN 1 · PADRE (SIRE)
               </div>
               {rootNode.sire && renderNodeCard(rootNode.sire, true)}
             </div>
 
             <div className="flex flex-col items-center">
-              <div className="text-[10px] font-mono text-rose-400 font-bold uppercase mb-2">
-                1. MADRE (DAM)
+              <div className="text-[10px] font-mono text-rose-400 font-bold uppercase mb-2 tracking-wider">
+                GEN 1 · MADRE (DAM)
               </div>
               {rootNode.dam && renderNodeCard(rootNode.dam, true)}
             </div>
           </div>
         )}
 
-        {/* Col 2: Grandparents (4) */}
+        {/* Col 2: Grandparents (4 Abuelos) */}
         {showGen2 && (
-          <div className="flex flex-col justify-around gap-8 shrink-0">
-            {/* Paternal Grandparents */}
+          <div className="flex flex-col justify-around gap-6 shrink-0">
             {showSireBranch && (
-              <div className="flex flex-col gap-6 p-2 rounded-2xl border border-blue-900/30 bg-blue-950/10">
-                <span className="text-[9px] font-mono font-bold text-blue-400 uppercase text-left pl-1">
-                  LÍNEA PATERNA (ABUELOS)
+              <div className="flex flex-col gap-4 p-2.5 rounded-2xl border border-blue-900/40 bg-blue-950/10">
+                <span className="text-[9.5px] font-mono font-bold text-blue-400 uppercase text-left pl-1">
+                  GEN 2 · ABUELOS PATERNOS
                 </span>
                 {rootNode.sire?.sire && renderNodeCard(rootNode.sire.sire, true)}
                 {rootNode.sire?.dam && renderNodeCard(rootNode.sire.dam, true)}
               </div>
             )}
 
-            {/* Maternal Grandparents */}
             {showDamBranch && (
-              <div className="flex flex-col gap-6 p-2 rounded-2xl border border-rose-900/30 bg-rose-950/10">
-                <span className="text-[9px] font-mono font-bold text-rose-400 uppercase text-left pl-1">
-                  LÍNEA MATERNA (ABUELOS)
+              <div className="flex flex-col gap-4 p-2.5 rounded-2xl border border-rose-900/40 bg-rose-950/10">
+                <span className="text-[9.5px] font-mono font-bold text-rose-400 uppercase text-left pl-1">
+                  GEN 2 · ABUELOS MATERNOS
                 </span>
                 {rootNode.dam?.sire && renderNodeCard(rootNode.dam.sire, true)}
                 {rootNode.dam?.dam && renderNodeCard(rootNode.dam.dam, true)}
@@ -701,11 +775,10 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
         {/* Col 3: Great-Grandparents (8 Bisabuelos) */}
         {showGen3 && (
           <div className="flex flex-col justify-around gap-4 shrink-0">
-            {/* Paternal Bisabuelos */}
             {(showSS || showSD) && (
-              <div className="flex flex-col gap-3 p-2 rounded-xl border border-blue-900/20 bg-blue-950/5">
-                <span className="text-[9px] font-mono font-bold text-blue-400 uppercase text-left pl-1">
-                  GEN 3: BISABUELOS PATERNOS
+              <div className="flex flex-col gap-2.5 p-2.5 rounded-2xl border border-blue-900/35 bg-blue-950/10">
+                <span className="text-[9.5px] font-mono font-bold text-blue-400 uppercase text-left pl-1">
+                  GEN 3 · BISABUELOS PATERNOS (4)
                 </span>
                 {showSS && rootNode.sire?.sire?.sire && renderNodeCard(rootNode.sire.sire.sire, true)}
                 {showSS && rootNode.sire?.sire?.dam && renderNodeCard(rootNode.sire.sire.dam, true)}
@@ -714,11 +787,10 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
               </div>
             )}
 
-            {/* Maternal Bisabuelos */}
             {(showDS || showDD) && (
-              <div className="flex flex-col gap-3 p-2 rounded-xl border border-rose-900/20 bg-rose-950/5">
-                <span className="text-[9px] font-mono font-bold text-rose-400 uppercase text-left pl-1">
-                  GEN 3: BISABUELOS MATERNOS
+              <div className="flex flex-col gap-2.5 p-2.5 rounded-2xl border border-rose-900/35 bg-rose-950/10">
+                <span className="text-[9.5px] font-mono font-bold text-rose-400 uppercase text-left pl-1">
+                  GEN 3 · BISABUELOS MATERNOS (4)
                 </span>
                 {showDS && rootNode.dam?.sire?.sire && renderNodeCard(rootNode.dam.sire.sire, true)}
                 {showDS && rootNode.dam?.sire?.dam && renderNodeCard(rootNode.dam.sire.dam, true)}
@@ -729,45 +801,33 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
           </div>
         )}
 
-        {/* Col 4: Great-Great-Grandparents (16 Tatarabuelos Completos) */}
+        {/* Col 4: Great-Great-Grandparents (16 Tatarabuelos Completos en pares ligados a cada Bisabuelo) */}
         {showGen4 && (
-          <div className="flex flex-col justify-around gap-6 shrink-0">
-            {/* 8 Tatarabuelos Paternos */}
+          <div className="flex flex-col justify-around gap-4 shrink-0">
             {(showSSS || showSSD || showSDS || showSDD) && (
-              <div className="flex flex-col gap-2 p-3 rounded-2xl border border-blue-900/40 bg-blue-950/20 shadow-lg">
+              <div className="flex flex-col gap-2 p-2.5 rounded-2xl border border-blue-900/45 bg-blue-950/15 shadow-lg">
                 <span className="text-[9.5px] font-mono font-bold text-blue-400 uppercase text-left pl-1">
-                  GEN 4: 8 TATARABUELOS PATERNOS (LÍNEA SIRE)
+                  GEN 4 · 8 TATARABUELOS PATERNOS
                 </span>
-
-                <div className="grid grid-cols-2 gap-2">
-                  {showSSS && rootNode.sire?.sire?.sire?.sire && renderNodeCard(rootNode.sire.sire.sire.sire, false)}
-                  {showSSS && rootNode.sire?.sire?.sire?.dam && renderNodeCard(rootNode.sire.sire.sire.dam, false)}
-                  {showSSD && rootNode.sire?.sire?.dam?.sire && renderNodeCard(rootNode.sire.sire.dam.sire, false)}
-                  {showSSD && rootNode.sire?.sire?.dam?.dam && renderNodeCard(rootNode.sire.sire.dam.dam, false)}
-                  {showSDS && rootNode.sire?.dam?.sire?.sire && renderNodeCard(rootNode.sire.dam.sire.sire, false)}
-                  {showSDS && rootNode.sire?.dam?.sire?.dam && renderNodeCard(rootNode.sire.dam.sire.dam, false)}
-                  {showSDD && rootNode.sire?.dam?.dam?.sire && renderNodeCard(rootNode.sire.dam.dam.sire, false)}
-                  {showSDD && rootNode.sire?.dam?.dam?.dam && renderNodeCard(rootNode.sire.dam.dam.dam, false)}
+                <div className="flex flex-col gap-2">
+                  {renderG4Pair(showSSS, rootNode.sire?.sire?.sire, 'blue')}
+                  {renderG4Pair(showSSD, rootNode.sire?.sire?.dam, 'blue')}
+                  {renderG4Pair(showSDS, rootNode.sire?.dam?.sire, 'blue')}
+                  {renderG4Pair(showSDD, rootNode.sire?.dam?.dam, 'blue')}
                 </div>
               </div>
             )}
 
-            {/* 8 Tatarabuelos Maternos */}
             {(showDSS || showDSD || showDDS || showDDD) && (
-              <div className="flex flex-col gap-2 p-3 rounded-2xl border border-rose-900/40 bg-rose-950/20 shadow-lg">
+              <div className="flex flex-col gap-2 p-2.5 rounded-2xl border border-rose-900/45 bg-rose-950/15 shadow-lg">
                 <span className="text-[9.5px] font-mono font-bold text-rose-400 uppercase text-left pl-1">
-                  GEN 4: 8 TATARABUELOS MATERNOS (LÍNEA DAM)
+                  GEN 4 · 8 TATARABUELOS MATERNOS
                 </span>
-
-                <div className="grid grid-cols-2 gap-2">
-                  {showDSS && rootNode.dam?.sire?.sire?.sire && renderNodeCard(rootNode.dam.sire.sire.sire, false)}
-                  {showDSS && rootNode.dam?.sire?.sire?.dam && renderNodeCard(rootNode.dam.sire.sire.dam, false)}
-                  {showDSD && rootNode.dam?.sire?.dam?.sire && renderNodeCard(rootNode.dam.sire.dam.sire, false)}
-                  {showDSD && rootNode.dam?.sire?.dam?.dam && renderNodeCard(rootNode.dam.sire.dam.dam, false)}
-                  {showDDS && rootNode.dam?.dam?.sire?.sire && renderNodeCard(rootNode.dam.dam.sire.sire, false)}
-                  {showDDS && rootNode.dam?.dam?.sire?.dam && renderNodeCard(rootNode.dam.dam.sire.dam, false)}
-                  {showDDD && rootNode.dam?.dam?.dam?.sire && renderNodeCard(rootNode.dam.dam.dam.sire, false)}
-                  {showDDD && rootNode.dam?.dam?.dam?.dam && renderNodeCard(rootNode.dam.dam.dam.dam, false)}
+                <div className="flex flex-col gap-2">
+                  {renderG4Pair(showDSS, rootNode.dam?.sire?.sire, 'rose')}
+                  {renderG4Pair(showDSD, rootNode.dam?.sire?.dam, 'rose')}
+                  {renderG4Pair(showDDS, rootNode.dam?.dam?.sire, 'rose')}
+                  {renderG4Pair(showDDD, rootNode.dam?.dam?.dam, 'rose')}
                 </div>
               </div>
             )}
@@ -777,6 +837,8 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
     );
   };
 
+  const isViewingAncestor = activeDog.regNumber !== dog.regNumber;
+
   return (
     <div
       ref={containerRef}
@@ -784,9 +846,8 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
         isFullscreen ? 'fixed inset-0 z-50 rounded-none border-none' : className
       }`}
     >
-      {/* 1. Header Toolbar: Compact & Responsive for Mobile, Tablet and Desktop */}
+      {/* 1. Header Toolbar */}
       <div className="p-2.5 sm:p-4 bg-gradient-to-r from-[#141008] via-[#1C150A] to-[#141008] border-b border-[#D4AF37]/30 flex flex-wrap items-center justify-between gap-2 sm:gap-3 shrink-0">
-        
         {/* Title & Proband Badge */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gold-gradient text-black flex items-center justify-center font-bold shadow shrink-0">
@@ -800,11 +861,25 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
               <span className="text-[9px] sm:text-[10px] font-mono font-bold text-[#FFE885] px-1.5 py-0.5 rounded bg-black/60 border border-[#D4AF37]/40 shrink-0">
                 4 GEN
               </span>
+              {isViewingAncestor && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveDog(dog);
+                    setSelectedNode(null);
+                  }}
+                  className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-[#D4AF37] text-black hover:brightness-110 shrink-0"
+                  title={`Regresar a ${dog.name}`}
+                >
+                  <ArrowLeft className="w-3 h-3" />
+                  <span>Volver a {dog.name}</span>
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] text-neutral-400 truncate">
-              <span className="text-white font-medium truncate">{dog.name}</span>
+              <span className="text-white font-medium truncate">{activeDog.name}</span>
               <span aria-hidden="true" className="text-[#D4AF37]">·</span>
-              <span className="font-mono text-[#FFE885]">{dog.regNumber}</span>
+              <span className="font-mono text-[#FFE885]">{activeDog.regNumber}</span>
             </div>
           </div>
         </div>
@@ -832,14 +907,8 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
             type="button"
             onClick={() => {
               setMaxGenerations(4);
-              if (typeof window !== 'undefined' && window.innerWidth < 768) {
-                setZoom(0.50);
-                setPan({ x: 5, y: 0 });
-              } else {
-                setZoom(0.72);
-                setPan({ x: 20, y: 0 });
-              }
               setCollapsedIds(new Set());
+              requestAnimationFrame(() => fitTreeToViewport());
             }}
             className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] sm:text-xs font-bold bg-[#1A140B] text-[#FFE885] border border-[#D4AF37]/50 hover:bg-[#D4AF37] hover:text-black transition-all"
             title="Ajustar y ver las 4 generaciones completas"
@@ -891,7 +960,7 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
             type="button"
             onClick={handleResetView}
             className="p-1.5 sm:p-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-200 transition-colors"
-            title="Centrar y restablecer vista"
+            title="Centrar y ajustar 4G en pantalla"
           >
             <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
@@ -902,7 +971,7 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
               onClick={handleExportTreeImage}
               disabled={isExporting}
               className="flex items-center gap-1 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl text-[10px] sm:text-xs font-bold bg-[#1C160B] border border-[#D4AF37]/60 text-[#FFE885] hover:bg-gold-gradient hover:text-black transition-all shadow"
-              title="Descargar árbol en formato PNG"
+              title="Descargar árbol completo de 4 generaciones en PNG"
             >
               <Download className="w-3.5 h-3.5" />
               <span className="hidden md:inline">{isExporting ? 'Exportando...' : 'PNG'}</span>
@@ -920,9 +989,10 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
         </div>
       </div>
 
-      {/* 2. Interactive Pan & Zoom Canvas (Full Touch Support & Responsive Height) */}
+      {/* 2. Interactive Pan & Zoom Canvas */}
       <div
-        className={`relative flex-1 overflow-hidden cursor-grab active:cursor-grabbing bg-[#050505] min-h-[460px] sm:min-h-[540px] ${
+        ref={viewportRef}
+        className={`relative flex-1 overflow-hidden cursor-grab active:cursor-grabbing bg-[#050505] min-h-[520px] sm:min-h-[640px] lg:min-h-[700px] ${
           isFullscreen ? 'h-[calc(100vh-60px)]' : ''
         }`}
         style={{ touchAction: 'none' }}
@@ -936,7 +1006,7 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
         onTouchCancel={handleTouchEnd}
       >
         {/* Subtle Luxury Grid Lines Pattern */}
-        <div 
+        <div
           className="absolute inset-0 opacity-15 pointer-events-none"
           style={{
             backgroundImage: `radial-gradient(circle at 1px 1px, #D4AF37 1px, transparent 0)`,
@@ -945,7 +1015,7 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
         />
 
         {/* Instruction Badge */}
-        <div className="absolute top-2 left-3 sm:top-3 sm:left-4 z-10 pointer-events-none flex items-center gap-1.5 text-[10px] sm:text-[11px] text-neutral-400 bg-black/70 px-2.5 py-1 rounded-full border border-neutral-800 backdrop-blur-sm">
+        <div className="absolute top-2 left-3 sm:top-3 sm:left-4 z-10 pointer-events-none flex items-center gap-1.5 text-[10px] sm:text-[11px] text-neutral-400 bg-black/75 px-2.5 py-1 rounded-full border border-neutral-800 backdrop-blur-sm">
           <Compass className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#D4AF37]" />
           <span>Arrastra o pellizca para explorar • Toca un ancestro</span>
         </div>
@@ -978,31 +1048,33 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
           </button>
         </div>
 
-        {/* Tree Inner Canvas */}
+        {/* Tree Inner Canvas (origin-top-left guarantees G0..G4 auto-fits accurately inside viewport) */}
         <div
           ref={treeCanvasRef}
-          className="w-full h-full flex items-center transition-transform duration-75 origin-center"
+          className="absolute top-0 left-0 w-max transition-transform duration-75"
           style={{
             transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            transformOrigin: 'top left',
           }}
         >
           {renderTreeBranches()}
         </div>
       </div>
 
-      {/* 3. Node Inspector Modal / Drawer (When an Ancestor is Clicked) */}
+      {/* 3. Node Inspector Drawer */}
       {selectedNode && (
-        <aside 
+        <aside
           aria-label="Detalles de ancestro seleccionado"
           className="absolute right-4 bottom-4 top-16 w-80 sm:w-96 rounded-2xl bg-[#0D0D0D]/95 border-2 border-[#D4AF37] p-4 text-left shadow-2xl backdrop-blur-md z-30 flex flex-col justify-between overflow-y-auto animate-fadeIn"
         >
           <div>
-            {/* Drawer Header */}
             <div className="flex items-start justify-between gap-2 pb-3 border-b border-neutral-800">
               <div>
-                <span className={`text-[10px] uppercase font-bold font-mono block ${
-                  selectedNode.gender === 'Macho' ? 'text-blue-400' : 'text-rose-400'
-                }`}>
+                <span
+                  className={`text-[10px] uppercase font-bold font-mono block ${
+                    selectedNode.gender === 'Macho' ? 'text-blue-400' : 'text-rose-400'
+                  }`}
+                >
                   {selectedNode.roleLabel} • Generación {selectedNode.generation}
                 </span>
                 <h5 className="text-base font-bold text-white font-serif-luxury leading-tight mt-0.5">
@@ -1019,7 +1091,6 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
               </button>
             </div>
 
-            {/* Canine Visual & Details */}
             <div className="py-4 space-y-3">
               {selectedNode.imageUrl && (
                 <div className="w-full aspect-video rounded-xl overflow-hidden border border-[#D4AF37]/50 shadow relative">
@@ -1034,7 +1105,6 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
                 </div>
               )}
 
-              {/* Data Table */}
               <div className="space-y-2 text-xs">
                 <div className="flex items-center justify-between p-2 rounded-lg bg-neutral-900 border border-neutral-800">
                   <span className="text-neutral-400">N° de Registro:</span>
@@ -1066,8 +1136,20 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
 
                 <div className="flex items-center justify-between p-2 rounded-lg bg-neutral-900 border border-neutral-800">
                   <span className="text-neutral-400">Línea de Parentesco:</span>
-                  <span className={`font-bold ${selectedNode.lineage === 'PATERNAL' ? 'text-blue-400' : selectedNode.lineage === 'MATERNAL' ? 'text-rose-400' : 'text-[#FFE885]'}`}>
-                    {selectedNode.lineage === 'PATERNAL' ? 'Línea Paterna' : selectedNode.lineage === 'MATERNAL' ? 'Línea Materna' : 'Proband Central'}
+                  <span
+                    className={`font-bold ${
+                      selectedNode.lineage === 'PATERNAL'
+                        ? 'text-blue-400'
+                        : selectedNode.lineage === 'MATERNAL'
+                        ? 'text-rose-400'
+                        : 'text-[#FFE885]'
+                    }`}
+                  >
+                    {selectedNode.lineage === 'PATERNAL'
+                      ? 'Línea Paterna'
+                      : selectedNode.lineage === 'MATERNAL'
+                      ? 'Línea Materna'
+                      : 'Proband Central'}
                   </span>
                 </div>
 
@@ -1088,15 +1170,14 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
             </div>
           </div>
 
-          {/* Actions on Inspected Canine */}
           <div className="pt-3 border-t border-neutral-800 space-y-2">
-            {/* Re-center Root on this ancestor (if available in database) */}
-            {selectedNode.dogRecord && selectedNode.id !== 'root' && onSelectDog && (
+            {selectedNode.dogRecord && selectedNode.id !== 'root' && (
               <button
                 type="button"
                 onClick={() => {
                   if (selectedNode.dogRecord) {
-                    onSelectDog(selectedNode.dogRecord);
+                    setActiveDog(selectedNode.dogRecord);
+                    onSelectDog?.(selectedNode.dogRecord);
                     setSelectedNode(null);
                   }
                 }}
@@ -1107,7 +1188,6 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
               </button>
             )}
 
-            {/* View Notarized Certificate */}
             {selectedNode.dogRecord && onOpenCertificate && (
               <button
                 type="button"
@@ -1143,10 +1223,12 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
           </div>
         </div>
 
-        <div className="flex items-center gap-3 font-mono text-[11px] text-neutral-500">
+        <div className="flex items-center gap-3 font-mono text-[11px] text-neutral-400">
           <span>Zoom: {Math.round(zoom * 100)}%</span>
           <span>·</span>
-          <span>Total en 4G: 31 Ancestros Verificados</span>
+          <span className="text-[#FFE885] font-bold">
+            {verifiedAncestorsCount} / 30 Ancestros en 4G
+          </span>
         </div>
       </div>
     </div>

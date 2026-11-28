@@ -29,6 +29,7 @@ const LOCAL_STORAGE_DOGS_KEY = 'inbr_custom_dogs_v2';
 const LOCAL_STORAGE_BREEDERS_KEY = 'inbr_custom_breeders_v2';
 
 import { 
+  buildEightGenPedigree,
   createAncestorLookup, 
   isPlaceholderAncestor, 
   normalizePedigreeAlnum, 
@@ -117,13 +118,20 @@ export function mapSupabaseToDogRecord(p: SupabasePerro): DogRecord {
     resolvedOwner = 'Criadero Oficial INBR';
   }
 
-  const looksLikeRegFolio = (val: string) => /^[A-Z]{1,4}[-_\s]?\d{3,}/i.test(val.replace(/\*/g, '').trim());
-  const cleanSireReg = sireName !== 'SIN REGISTRO' && looksLikeRegFolio(sireName)
-    ? sireName.replace(/\*/g, '').trim().toUpperCase()
-    : '—';
-  const cleanDamReg = damName !== 'SIN REGISTRO' && looksLikeRegFolio(damName)
-    ? damName.replace(/\*/g, '').trim().toUpperCase()
-    : '—';
+  const extractParentReg = (val: string): string => {
+    if (!val || val === 'SIN REGISTRO') return '—';
+    const cleaned = val.replace(/\*/g, '').trim().toUpperCase();
+    if (/^(?:INBR[-_\s]?)?(?:REG[-_A-Z0-9]+|[A-Z]{1,4}[-_\s]?\d{3,})$/i.test(cleaned)) {
+      return cleaned;
+    }
+    const parenMatch = cleaned.match(/\(([A-Z]{1,4}[-_\s]?\d{3,}|REG[-_A-Z0-9]+)\)/i);
+    if (parenMatch) {
+      return parenMatch[1].replace(/\s+/g, '').toUpperCase();
+    }
+    return '—';
+  };
+  const cleanSireReg = extractParentReg(sireName);
+  const cleanDamReg = extractParentReg(damName);
 
   const cleanChip = hasRealMicrochip(p.chip)
     ? p.chip!.trim()
@@ -244,7 +252,62 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       }
 
-      if (allFetchedDogs.length > 0) {
+      // Fetch supplemental specimens + pedigree_ancestors (low-priority fallback only when not in perros)
+      let supplementalDogs: DogRecord[] = [];
+      try {
+        const [{ data: specRows }, { data: relRows }] = await Promise.all([
+          supabase.from('specimens').select('*').limit(200),
+          supabase.from('pedigree_ancestors').select('*').limit(500),
+        ]);
+        if (Array.isArray(specRows) && specRows.length > 0) {
+          const specById = new Map<string, any>();
+          specRows.forEach((s: any) => { if (s?.id) specById.set(s.id, s); });
+          const parentsBySpecId = new Map<string, { sire?: any; dam?: any }>();
+          if (Array.isArray(relRows)) {
+            relRows.forEach((rel: any) => {
+              if (Number(rel.generation_level) !== 1 || !rel.specimen_id || !rel.ancestor_id) return;
+              const anc = specById.get(rel.ancestor_id);
+              if (!anc) return;
+              const entry = parentsBySpecId.get(rel.specimen_id) || {};
+              const rType = String(rel.relationship_type || '').toLowerCase();
+              if (rType.includes('dam') || rType.includes('mother')) entry.dam = anc;
+              else entry.sire = anc;
+              parentsBySpecId.set(rel.specimen_id, entry);
+            });
+          }
+          supplementalDogs = specRows
+            .filter((s: any) => s?.registration_number && s?.name)
+            .map((s: any) => {
+              const p = parentsBySpecId.get(s.id) || {};
+              const isFem = String(s.sex || '').toUpperCase().startsWith('F') || String(s.sex || '').toUpperCase().startsWith('H');
+              return {
+                regNumber: String(s.registration_number).trim().toUpperCase(),
+                microchip: s.chip || `INBR-CHIP-${String(s.registration_number).trim()}`,
+                name: String(s.name).trim().toUpperCase(),
+                breed: s.breed || 'American Bully',
+                variety: 'Standard',
+                gender: isFem ? 'Hembra' : 'Macho',
+                dob: s.birth_date || '2022-01-01',
+                color: s.color || 'Estándar Oficial',
+                owner: 'Criadero Oficial INBR',
+                breeder: 'Criadero Registrado INBR',
+                country: 'México',
+                sire: p.sire?.name ? String(p.sire.name).trim().toUpperCase() : 'SIN REGISTRO',
+                sireReg: p.sire?.registration_number ? String(p.sire.registration_number).trim().toUpperCase() : '—',
+                dam: p.dam?.name ? String(p.dam.name).trim().toUpperCase() : 'SIN REGISTRO',
+                damReg: p.dam?.registration_number ? String(p.dam.registration_number).trim().toUpperCase() : '—',
+                points: Number(s.points) || 0,
+                titles: s.championship_status ? [String(s.championship_status)] : [],
+                imageUrl: getBreedImageByIdOrName(s.breed || ''),
+                status: 'ACTIVE_VALIDATED',
+              } as DogRecord;
+            });
+        }
+      } catch {
+        // Supplemental tables are optional
+      }
+
+      if (allFetchedDogs.length > 0 || supplementalDogs.length > 0) {
         const mappedRecords = allFetchedDogs.map(mapSupabaseToDogRecord);
 
         setDogs(() => {
@@ -257,6 +320,10 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           };
 
           SAMPLE_DOGS.forEach(upsertIntoMap);
+          supplementalDogs.forEach((d) => {
+            const key = normalizePedigreeAlnum(d.regNumber) || d.regNumber.toUpperCase().trim();
+            if (!map.has(key)) map.set(key, d);
+          });
           mappedRecords.forEach(upsertIntoMap);
 
           const merged = Array.from(map.values());
@@ -501,104 +568,62 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     refreshFromSupabase();
   };
 
-  const crossReferenceDog = (dog: DogRecord): DogRecord => {
+  const crossReferenceDogWithList = (dog: DogRecord, dogList: DogRecord[]): DogRecord => {
     if (!dog) return dog;
-
-    const { findAncestor } = createAncestorLookup(dogs);
-    const rootVisited = new Set<string>();
-    const rootReg = normalizePedigreeAlnum(dog.regNumber);
-    if (rootReg) rootVisited.add(rootReg);
-
-    const sireObj = findAncestor(dog.sireReg, dog, rootVisited) || findAncestor(dog.sire, dog, rootVisited);
-    const damObj = findAncestor(dog.damReg, dog, rootVisited) || findAncestor(dog.dam, dog, rootVisited);
-
-    const sireVisited = new Set(rootVisited);
-    if (sireObj?.regNumber) sireVisited.add(normalizePedigreeAlnum(sireObj.regNumber));
-    const damVisited = new Set(rootVisited);
-    if (damObj?.regNumber) damVisited.add(normalizePedigreeAlnum(damObj.regNumber));
-
-    const ssObj = sireObj ? (findAncestor(sireObj.sireReg, sireObj, sireVisited) || findAncestor(sireObj.sire, sireObj, sireVisited)) : undefined;
-    const sdObj = sireObj ? (findAncestor(sireObj.damReg, sireObj, sireVisited) || findAncestor(sireObj.dam, sireObj, sireVisited)) : undefined;
-    const dsObj = damObj ? (findAncestor(damObj.sireReg, damObj, damVisited) || findAncestor(damObj.sire, damObj, damVisited)) : undefined;
-    const ddObj = damObj ? (findAncestor(damObj.damReg, damObj, damVisited) || findAncestor(damObj.dam, damObj, damVisited)) : undefined;
-
+    const ped = buildEightGenPedigree(dog, dogList);
     const existingG = dog.genogram;
-
-    const safeSireReg =
-      sireObj?.regNumber ||
-      (!isPlaceholderAncestor(dog.sireReg) && normalizePedigreeAlnum(dog.sireReg) !== rootReg ? dog.sireReg! : '') ||
-      existingG?.sire?.reg ||
-      '—';
-
-    const safeDamReg =
-      damObj?.regNumber ||
-      (!isPlaceholderAncestor(dog.damReg) && normalizePedigreeAlnum(dog.damReg) !== rootReg ? dog.damReg! : '') ||
-      existingG?.dam?.reg ||
-      '—';
-
-    const sireName =
-      (!isPlaceholderAncestor(dog.sire) ? dog.sire : '') ||
-      sireObj?.name ||
-      existingG?.sire?.name ||
-      'SIN REGISTRO';
-
-    const damName =
-      (!isPlaceholderAncestor(dog.dam) ? dog.dam : '') ||
-      damObj?.name ||
-      existingG?.dam?.name ||
-      'SIN REGISTRO';
-
-    const enrichedSire = {
-      name: sireName,
-      reg: safeSireReg,
-      titles: sireObj?.titles || existingG?.sire?.titles || [],
-      sire: {
-        name: ssObj?.name || (!isPlaceholderAncestor(sireObj?.sire) ? sireObj!.sire! : '') || existingG?.sire?.sire?.name || 'SIN REGISTRO',
-        reg: ssObj?.regNumber || (!isPlaceholderAncestor(sireObj?.sireReg) ? sireObj!.sireReg! : '') || existingG?.sire?.sire?.reg || '—',
-        titles: ssObj?.titles || existingG?.sire?.sire?.titles || [],
-        sire: (!isPlaceholderAncestor(ssObj?.sire) ? ssObj!.sire! : '') || existingG?.sire?.sire?.sire || 'SIN REGISTRO',
-        dam: (!isPlaceholderAncestor(ssObj?.dam) ? ssObj!.dam! : '') || existingG?.sire?.sire?.dam || 'SIN REGISTRO',
-      },
-      dam: {
-        name: sdObj?.name || (!isPlaceholderAncestor(sireObj?.dam) ? sireObj!.dam! : '') || existingG?.sire?.dam?.name || 'SIN REGISTRO',
-        reg: sdObj?.regNumber || (!isPlaceholderAncestor(sireObj?.damReg) ? sireObj!.damReg! : '') || existingG?.sire?.dam?.reg || '—',
-        titles: sdObj?.titles || existingG?.sire?.dam?.titles || [],
-        sire: (!isPlaceholderAncestor(sdObj?.sire) ? sdObj!.sire! : '') || existingG?.sire?.dam?.sire || 'SIN REGISTRO',
-        dam: (!isPlaceholderAncestor(sdObj?.dam) ? sdObj!.dam! : '') || existingG?.sire?.dam?.dam || 'SIN REGISTRO',
-      },
-    };
-
-    const enrichedDam = {
-      name: damName,
-      reg: safeDamReg,
-      titles: damObj?.titles || existingG?.dam?.titles || [],
-      sire: {
-        name: dsObj?.name || (!isPlaceholderAncestor(damObj?.sire) ? damObj!.sire! : '') || existingG?.dam?.sire?.name || 'SIN REGISTRO',
-        reg: dsObj?.regNumber || (!isPlaceholderAncestor(damObj?.sireReg) ? damObj!.sireReg! : '') || existingG?.dam?.sire?.reg || '—',
-        titles: dsObj?.titles || existingG?.dam?.sire?.titles || [],
-        sire: (!isPlaceholderAncestor(dsObj?.sire) ? dsObj!.sire! : '') || existingG?.dam?.sire?.sire || 'SIN REGISTRO',
-        dam: (!isPlaceholderAncestor(dsObj?.dam) ? dsObj!.dam! : '') || existingG?.dam?.sire?.dam || 'SIN REGISTRO',
-      },
-      dam: {
-        name: ddObj?.name || (!isPlaceholderAncestor(damObj?.dam) ? damObj!.dam! : '') || existingG?.dam?.dam?.name || 'SIN REGISTRO',
-        reg: ddObj?.regNumber || (!isPlaceholderAncestor(damObj?.damReg) ? damObj!.damReg! : '') || existingG?.dam?.dam?.reg || '—',
-        titles: ddObj?.titles || existingG?.dam?.dam?.titles || [],
-        sire: (!isPlaceholderAncestor(ddObj?.sire) ? ddObj!.sire! : '') || existingG?.dam?.dam?.sire || 'SIN REGISTRO',
-        dam: (!isPlaceholderAncestor(ddObj?.dam) ? ddObj!.dam! : '') || existingG?.dam?.dam?.dam || 'SIN REGISTRO',
-      },
-    };
 
     return {
       ...dog,
-      sire: sireName,
-      sireReg: safeSireReg,
-      dam: damName,
-      damReg: safeDamReg,
+      sire: ped.sire.name,
+      sireReg: ped.sire.regNumber,
+      dam: ped.dam.name,
+      damReg: ped.dam.regNumber,
       genogram: {
-        sire: enrichedSire,
-        dam: enrichedDam,
+        sire: {
+          name: ped.sire.name,
+          reg: ped.sire.regNumber,
+          titles: ped.sire.titles?.length ? ped.sire.titles : (existingG?.sire?.titles || []),
+          sire: {
+            name: ped.sireSire.name,
+            reg: ped.sireSire.regNumber,
+            titles: ped.sireSire.titles?.length ? ped.sireSire.titles : (existingG?.sire?.sire?.titles || []),
+            sire: ped.g3[0]?.name || existingG?.sire?.sire?.sire || 'SIN REGISTRO',
+            dam: ped.g3[1]?.name || existingG?.sire?.sire?.dam || 'SIN REGISTRO',
+          },
+          dam: {
+            name: ped.sireDam.name,
+            reg: ped.sireDam.regNumber,
+            titles: ped.sireDam.titles?.length ? ped.sireDam.titles : (existingG?.sire?.dam?.titles || []),
+            sire: ped.g3[2]?.name || existingG?.sire?.dam?.sire || 'SIN REGISTRO',
+            dam: ped.g3[3]?.name || existingG?.sire?.dam?.dam || 'SIN REGISTRO',
+          },
+        },
+        dam: {
+          name: ped.dam.name,
+          reg: ped.dam.regNumber,
+          titles: ped.dam.titles?.length ? ped.dam.titles : (existingG?.dam?.titles || []),
+          sire: {
+            name: ped.damSire.name,
+            reg: ped.damSire.regNumber,
+            titles: ped.damSire.titles?.length ? ped.damSire.titles : (existingG?.dam?.sire?.titles || []),
+            sire: ped.g3[4]?.name || existingG?.dam?.sire?.sire || 'SIN REGISTRO',
+            dam: ped.g3[5]?.name || existingG?.dam?.sire?.dam || 'SIN REGISTRO',
+          },
+          dam: {
+            name: ped.damDam.name,
+            reg: ped.damDam.regNumber,
+            titles: ped.damDam.titles?.length ? ped.damDam.titles : (existingG?.dam?.dam?.titles || []),
+            sire: ped.g3[6]?.name || existingG?.dam?.dam?.sire || 'SIN REGISTRO',
+            dam: ped.g3[7]?.name || existingG?.dam?.dam?.dam || 'SIN REGISTRO',
+          },
+        },
       },
     };
+  };
+
+  const crossReferenceDog = (dog: DogRecord): DogRecord => {
+    return crossReferenceDogWithList(dog, dogs);
   };
 
   const findDogByQuery = (query: string): DogRecord | undefined => {
@@ -677,35 +702,104 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return undefined;
   };
 
+  const hydrateAncestorsOnline = async (rootDog: DogRecord, baseList: DogRecord[]): Promise<DogRecord[]> => {
+    const collected = new Map<string, DogRecord>();
+    baseList.forEach((d) => {
+      if (d?.regNumber) {
+        const k = normalizePedigreeAlnum(d.regNumber) || d.regNumber.toUpperCase().trim();
+        collected.set(k, d);
+      }
+    });
+    const rootKey = normalizePedigreeAlnum(rootDog.regNumber) || rootDog.regNumber.toUpperCase().trim();
+    collected.set(rootKey, rootDog);
+
+    const fetchedQueries = new Set<string>();
+    let frontier: DogRecord[] = [rootDog];
+
+    for (let depth = 0; depth < 4 && frontier.length > 0; depth++) {
+      const { findAncestor } = createAncestorLookup(Array.from(collected.values()));
+      const missingQueries: string[] = [];
+
+      frontier.forEach((node) => {
+        const candidates = [
+          { ref: node.sireReg, alt: node.sire, side: 'sire' as const },
+          { ref: node.damReg, alt: node.dam, side: 'dam' as const },
+        ];
+        candidates.forEach(({ ref, alt, side }) => {
+          const matched = findAncestor(ref, node, undefined, side) || findAncestor(alt, node, undefined, side);
+          if (!matched) {
+            const q = (!isPlaceholderAncestor(ref) ? ref : !isPlaceholderAncestor(alt) ? alt : '')?.trim();
+            if (q && !fetchedQueries.has(q.toUpperCase())) {
+              fetchedQueries.add(q.toUpperCase());
+              missingQueries.push(q);
+            }
+          }
+        });
+      });
+
+      if (missingQueries.length === 0) break;
+
+      const results = await Promise.all(
+        missingQueries.slice(0, 12).map((q) => libSearchDog(q).catch(() => null))
+      );
+
+      const newlyAdded: DogRecord[] = [];
+      results.forEach((row) => {
+        if (!row) return;
+        const mapped = mapSupabaseToDogRecord(row);
+        const k = normalizePedigreeAlnum(mapped.regNumber) || mapped.regNumber.toUpperCase().trim();
+        const existing = collected.get(k);
+        const merged = existing ? mergeDogRecords(existing, mapped) : mapped;
+        collected.set(k, merged);
+        newlyAdded.push(merged);
+      });
+
+      // Also advance frontier along any newly hydrated or existing parents
+      const nextFrontier: DogRecord[] = [];
+      const updatedLookup = createAncestorLookup(Array.from(collected.values()));
+      frontier.forEach((node) => {
+        const sObj = updatedLookup.findAncestor(node.sireReg, node, undefined, 'sire') || updatedLookup.findAncestor(node.sire, node, undefined, 'sire');
+        const dObj = updatedLookup.findAncestor(node.damReg, node, undefined, 'dam') || updatedLookup.findAncestor(node.dam, node, undefined, 'dam');
+        if (sObj) nextFrontier.push(sObj);
+        if (dObj) nextFrontier.push(dObj);
+      });
+      if (newlyAdded.length === 0 && nextFrontier.length === 0) break;
+      frontier = nextFrontier;
+    }
+
+    return Array.from(collected.values());
+  };
+
   const searchDogOnlineAndOffline = async (query: string): Promise<DogRecord | undefined> => {
     // 1. Try immediate synchronous local search
     const local = findDogByQuery(query);
-    if (local) return local;
+    if (local) {
+      if (!isLoadingSupabase) return local;
+      // If full Supabase sync is still in flight, hydrate ancestors up to 4G immediately
+      const expanded = await hydrateAncestorsOnline(local, dogs);
+      if (expanded.length > dogs.length) {
+        setDogs(expanded);
+      }
+      return crossReferenceDogWithList(local, expanded);
+    }
 
     // 2. Query Supabase directly in real-time
     try {
       const livePerro = await libSearchDog(query);
       if (livePerro) {
         const mapped = mapSupabaseToDogRecord(livePerro);
-        setDogs((prev) => {
-          const map = new Map<string, DogRecord>();
-          const upsertIntoMap = (d: DogRecord) => {
-            const key = normalizePedigreeAlnum(d.regNumber) || d.regNumber.toUpperCase().trim();
-            const existing = map.get(key);
-            map.set(key, existing ? mergeDogRecords(existing, d) : d);
-          };
-          prev.forEach(upsertIntoMap);
-          upsertIntoMap(mapped);
-          const updated = Array.from(map.values());
+        const expanded = await hydrateAncestorsOnline(mapped, dogs);
+
+        setDogs(() => {
           if (typeof window !== 'undefined') {
             try {
-              localStorage.setItem(LOCAL_STORAGE_DOGS_KEY, JSON.stringify(updated));
+              localStorage.setItem(LOCAL_STORAGE_DOGS_KEY, JSON.stringify(expanded));
             } catch {}
           }
-          return updated;
+          return expanded;
         });
         setSupabaseConnected(true);
-        return crossReferenceDog(mapped);
+        return crossReferenceDogWithList(mapped, expanded);
       }
     } catch (err) {
       console.warn('Error querying Supabase live:', err);

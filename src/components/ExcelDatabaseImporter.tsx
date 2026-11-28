@@ -141,9 +141,9 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
           // Distinct relational column extraction (avoid NOMBRE DEL PADRE / MADRE as dog name)
           let name = findVal(['nombreejemplar', 'nombreperro', 'nombre', 'ejemplar', 'cachorro', 'cria'], ['padre', 'madre', 'sire', 'dam', 'propietario', 'dueno', 'criador', 'owner']);
           const sire = findVal(['padre', 'sire', 'papa', 'idpadre'], ['madre', 'dam', 'mama', 'regpadre']) || 'INBR CHAMPION SIRE';
-          const sireReg = findVal(['regpadre', 'sirereg', 'regsire']) || `REG-${sire.replace(/[^A-Za-z0-9]/g, '').toUpperCase()}`;
+          const sireReg = findVal(['regpadre', 'sirereg', 'regsire']) || '—';
           const dam = findVal(['madre', 'dam', 'mama', 'idmadre'], ['padre', 'sire', 'papa', 'regmadre']) || 'INBR CHAMPION DAM';
-          const damReg = findVal(['regmadre', 'damreg', 'regdam']) || `REG-${dam.replace(/[^A-Za-z0-9]/g, '').toUpperCase()}`;
+          const damReg = findVal(['regmadre', 'damreg', 'regdam']) || '—';
           let owner = findVal(['propietario', 'propietarionombre', 'dueno', 'owner', 'titular'], ['padre', 'madre', 'sire', 'dam']) || 'Criador Afiliado INBR';
 
           const isCamada = reg.toUpperCase().startsWith('CA');

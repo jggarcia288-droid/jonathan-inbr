@@ -102,12 +102,14 @@ export const AncestorAutocompleteInput: React.FC<AncestorAutocompleteInputProps>
   };
 
   const highlightMatch = (text: string, query: string) => {
-    if (!query.trim()) return text;
-    const parts = text.split(new RegExp(`(${query.trim()})`, 'gi'));
+    const trimmed = query.trim();
+    if (!trimmed) return text;
+    const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
     return (
       <>
         {parts.map((part, i) =>
-          part.toLowerCase() === query.toLowerCase().trim() ? (
+          part.toLowerCase() === trimmed.toLowerCase() ? (
             <mark key={i} className="bg-transparent text-[#FFE885] font-black underline decoration-[#D4AF37]">
               {part}
             </mark>

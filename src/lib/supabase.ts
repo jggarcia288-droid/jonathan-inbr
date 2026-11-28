@@ -305,21 +305,52 @@ export async function searchDogInSupabase(query: string): Promise<SupabasePerro 
     }
 
     // 2. Tier 2 (text-only queries, e.g. searching by dog name): exact or partial match on nombre
-    const safeTerm = withoutStars.replace(/,/g, '');
+    const normalizeTextKey = (val?: string | null) =>
+      (val || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\*/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toUpperCase();
+    const normalizeAlnumKey = (val?: string | null) =>
+      (val || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^A-Za-z0-9]/g, '')
+        .toUpperCase();
+    const isLitterRow = (r: SupabasePerro) => {
+      const reg = (r.numero_registro || '').replace(/\*/g, '').trim().toUpperCase();
+      if (/^(CA|C|CU|CPR|CGTB|CKM|CTRI|SBCC)\d/.test(reg)) return true;
+      const nA = normalizeAlnumKey(r.nombre);
+      if (nA && r.id_padre && nA === normalizeAlnumKey(r.id_padre)) return true;
+      return false;
+    };
+
+    const safeTerm = withoutStars.replace(/[,()*]/g, ' ').replace(/\s+/g, ' ').trim();
+    const queryTokens = safeTerm.split(' ').filter((w) => w.length >= 3);
+    const searchToken = queryTokens.sort((a, b) => b.length - a.length)[0] || safeTerm;
     const { data: nameMatches, error: nameError } = await supabase
       .from('perros')
       .select('*')
-      .ilike('nombre', `%${safeTerm}%`)
-      .limit(15);
+      .ilike('nombre', `%${searchToken}%`)
+      .limit(35);
 
     if (!nameError && nameMatches && nameMatches.length > 0) {
-      const exactNamed = (nameMatches as SupabasePerro[]).filter(
-        (d) => (d.nombre || '').toUpperCase().replace(/\s+/g, ' ').trim() === withoutStars.replace(/\s+/g, ' ').trim()
+      const allRows = nameMatches as SupabasePerro[];
+      const adultRows = allRows.filter((r) => !isLitterRow(r));
+      const pool = adultRows.length > 0 ? adultRows : allRows;
+
+      const targetNorm = normalizeTextKey(withoutStars);
+      const targetAlnum = normalizeAlnumKey(withoutStars);
+
+      const exactNamed = pool.filter(
+        (d) => normalizeTextKey(d.nombre) === targetNorm || (targetAlnum && normalizeAlnumKey(d.nombre) === targetAlnum)
       );
       if (exactNamed.length > 0) {
         return mergePerroVariants(exactNamed);
       }
-      return nameMatches[0] as SupabasePerro;
+      return pool[0];
     }
 
     return null;
