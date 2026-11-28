@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   supabase, 
   saveCmsConfigDirect, 
@@ -337,6 +337,9 @@ export interface DynamicContentConfig {
 
   // Global DOM custom text overrides (allows modifying any text across the entire web DOM)
   customTextOverrides?: Record<string, string>;
+
+  // Sync timestamp to prevent stale localStorage from overwriting newer Supabase CMS config
+  _updatedAt?: number;
 }
 
 export const DEFAULT_CERTIFICATE_OFFSETS: CertificateLayoutOffsets = {
@@ -1102,21 +1105,63 @@ export function applyTextScaleToDom(scale?: 'small' | 'normal' | 'large' | 'xlar
   }
 }
 
+const DOM_SCAN_SELECTOR =
+  'section h1, section h2, section h3, section h4, section h5, section p, header h1, header h2, header h3, footer p, footer h3, footer h4, [data-cms-key]';
+
+function isIgnoredAdminElement(el: Element): boolean {
+  return Boolean(
+    el.closest('.fixed.inset-0.z-50') ||
+      el.closest('#admin-modal-container') ||
+      el.closest('#cms-inline-editor') ||
+      el.classList.contains('no-print')
+  );
+}
+
+/**
+ * Assigns deterministic `data-dom-id` attributes to public DOM text elements
+ * matching the exact rules of the Admin DOM Scanner so saved `dom_*` overrides
+ * apply automatically on every mobile phone and clean browser session.
+ */
+export function assignDeterministicDomIds(): void {
+  if (typeof document === 'undefined') return;
+  try {
+    const candidates = document.querySelectorAll<HTMLElement>(DOM_SCAN_SELECTOR);
+    let counter = 0;
+    candidates.forEach((el) => {
+      if (isIgnoredAdminElement(el)) return;
+      const rawText = el.textContent?.trim() || '';
+      if (!rawText || rawText.length < 3) return;
+      counter++;
+      if (el.getAttribute('data-cms-key') || el.getAttribute('data-dom-id')) return;
+      const parentSection = el.closest('section, header, footer');
+      const sectionId = parentSection?.id || '';
+      const stableId = `dom_${sectionId || 'main'}_${el.tagName.toLowerCase()}_${counter}`;
+      el.setAttribute('data-dom-id', stableId);
+    });
+  } catch {}
+}
+
 export function applyCustomTextOverridesToDom(overrides?: Record<string, string>) {
   if (typeof document === 'undefined' || !overrides) return;
-  Object.entries(overrides).forEach(([key, val]) => {
+  const entries = Object.entries(overrides);
+  if (entries.length === 0) return;
+
+  // Ensure all public DOM elements have deterministic data-dom-id attributes on clean sessions/mobile
+  assignDeterministicDomIds();
+
+  entries.forEach(([key, val]) => {
     if (val === undefined || val === null) return;
     try {
       // 1. Selector by data-cms-key or data-dom-id
       const el = document.querySelector(`[data-cms-key="${key}"], [data-dom-id="${key}"]`);
-      if (el && el.textContent !== val) {
+      if (el && !isIgnoredAdminElement(el) && el.textContent !== val) {
         el.textContent = val;
         return;
       }
       // 2. CSS selector if valid
       if (key.startsWith('#') || key.startsWith('.')) {
         const elSel = document.querySelector(key);
-        if (elSel && elSel.textContent !== val) {
+        if (elSel && !isIgnoredAdminElement(elSel) && elSel.textContent !== val) {
           elSel.textContent = val;
         }
       }
@@ -1129,35 +1174,60 @@ let inMemoryConfig: DynamicContentConfig | null = null;
 
 /**
  * Safely persists configuration to LocalStorage.
- * If base64 images exceed browser's 5MB quota, it sanitizes heavy strings
- * so the local cache never corrupts or throws QuotaExceededError.
+ * If base64 images exceed browser's 5MB quota, strips ALL heavy inline data:image strings
+ * so mobile browsers never drop text edits or throw QuotaExceededError.
  */
 function safeSetLocalStorage(key: string, config: DynamicContentConfig) {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(key, JSON.stringify(config));
   } catch (err) {
-    console.warn('LocalStorage quota reached. Trimming heavy images for browser cache:', err);
+    console.warn('LocalStorage quota reached. Trimming heavy inline images for mobile cache:', err);
     try {
-      const trimmed = { ...config };
-      if (Array.isArray(trimmed.executiveTeam)) {
-        trimmed.executiveTeam = trimmed.executiveTeam.map((m) => ({
-          ...m,
-          image: m.image && m.image.startsWith('data:') && m.image.length > 40000 ? '' : m.image,
-        }));
-      }
-      if (Array.isArray(trimmed.judgesList)) {
-        trimmed.judgesList = trimmed.judgesList.map((j) => ({
-          ...j,
-          image: j.image && j.image.startsWith('data:') && j.image.length > 40000 ? '' : j.image,
-        }));
-      }
-      if (Array.isArray(trimmed.representativesList)) {
-        trimmed.representativesList = trimmed.representativesList.map((r) => ({
-          ...r,
-          image: r.image && r.image.startsWith('data:') && r.image.length > 40000 ? '' : r.image,
-        }));
-      }
+      const stripLargeDataUrl = (val?: string) =>
+        val && val.startsWith('data:') && val.length > 15000 ? '' : val;
+
+      const trimmed: DynamicContentConfig = {
+        ...config,
+        heroBannerUrl: stripLargeDataUrl(config.heroBannerUrl) || '',
+        eventsBannerUrl: stripLargeDataUrl(config.eventsBannerUrl) || '',
+        aboutUsPhoto: stripLargeDataUrl(config.aboutUsPhoto) || '',
+        specialEditionBanner1: stripLargeDataUrl(config.specialEditionBanner1) || '',
+        specialEditionBanner2: stripLargeDataUrl(config.specialEditionBanner2) || '',
+        specialEditionPhoto: stripLargeDataUrl(config.specialEditionPhoto) || '',
+        hallOfFamePhoto1: stripLargeDataUrl(config.hallOfFamePhoto1) || '',
+        hallOfFamePhoto2: stripLargeDataUrl(config.hallOfFamePhoto2) || '',
+        siteLogoUrl: stripLargeDataUrl(config.siteLogoUrl) || '',
+        certificateBackgroundUrl: stripLargeDataUrl(config.certificateBackgroundUrl) || '',
+        certBackBackgroundUrl: stripLargeDataUrl(config.certBackBackgroundUrl) || '',
+        litterBackgroundUrl: stripLargeDataUrl(config.litterBackgroundUrl) || '',
+        pvcBackgroundUrl: stripLargeDataUrl(config.pvcBackgroundUrl) || '',
+        standardsPdfUrl: stripLargeDataUrl(config.standardsPdfUrl) || '',
+        executiveTeam: Array.isArray(config.executiveTeam)
+          ? config.executiveTeam.map((m) => ({ ...m, image: stripLargeDataUrl(m.image) || '' }))
+          : [],
+        judgesList: Array.isArray(config.judgesList)
+          ? config.judgesList.map((j) => ({ ...j, image: stripLargeDataUrl(j.image) || '' }))
+          : [],
+        representativesList: Array.isArray(config.representativesList)
+          ? config.representativesList.map((r) => ({ ...r, image: stripLargeDataUrl(r.image) || '' }))
+          : [],
+        bullBreedsList: Array.isArray(config.bullBreedsList)
+          ? config.bullBreedsList.map((b) => ({ ...b, image: stripLargeDataUrl(b.image) || '' }))
+          : [],
+        galleryPhotos: Array.isArray(config.galleryPhotos)
+          ? config.galleryPhotos.map((g) => ({ ...g, imageUrl: stripLargeDataUrl(g.imageUrl) || '' }))
+          : [],
+        specialEditionList: Array.isArray(config.specialEditionList)
+          ? config.specialEditionList.map((s) => ({ ...s, imageUrl: stripLargeDataUrl(s.imageUrl) || '' }))
+          : [],
+        eventsList: Array.isArray(config.eventsList)
+          ? config.eventsList.map((ev) => ({ ...ev, banner: stripLargeDataUrl(ev.banner) || '' }))
+          : [],
+        hallOfFameList: Array.isArray(config.hallOfFameList)
+          ? config.hallOfFameList.map((h) => ({ ...h, image: stripLargeDataUrl(h.image) || '' }))
+          : [],
+      };
       localStorage.setItem(key, JSON.stringify(trimmed));
     } catch (fallbackErr) {
       console.warn('LocalStorage unavailable for dynamic content cache:', fallbackErr);
@@ -1229,8 +1299,8 @@ function sanitizeDynamicConfig(config: DynamicContentConfig): DynamicContentConf
   };
 
   const sanitizeImage = (img?: string) => {
-    // Only strip if corrupted or huge local base64 (>300KB)
-    if (img && img.startsWith('data:image') && img.length > 300000) {
+    // Allow larger legacy inline base64 strings up to ~950KB (offloaded to Storage on save)
+    if (img && img.startsWith('data:image') && img.length > 950000) {
       return '';
     }
     return img || '';
@@ -1378,59 +1448,63 @@ function sanitizeDynamicConfig(config: DynamicContentConfig): DynamicContentConf
   };
 }
 
+function mergeParsedConfig(parsed: any): DynamicContentConfig {
+  const merged: DynamicContentConfig = {
+    ...DEFAULT_DYNAMIC_CONTENT,
+    ...parsed,
+    customTextOverrides: parsed.customTextOverrides || {},
+    executiveTeam: Array.isArray(parsed.executiveTeam)
+      ? parsed.executiveTeam
+      : DEFAULT_DYNAMIC_CONTENT.executiveTeam,
+    representativesList: Array.isArray(parsed.representativesList)
+      ? parsed.representativesList
+      : DEFAULT_DYNAMIC_CONTENT.representativesList,
+    judgesList: Array.isArray(parsed.judgesList)
+      ? parsed.judgesList
+      : DEFAULT_DYNAMIC_CONTENT.judgesList,
+    galleryPhotos: Array.isArray(parsed.galleryPhotos)
+      ? parsed.galleryPhotos
+      : DEFAULT_DYNAMIC_CONTENT.galleryPhotos,
+    breedsList: Array.isArray(parsed.breedsList)
+      ? parsed.breedsList
+      : DEFAULT_DYNAMIC_CONTENT.breedsList,
+    eventsList: Array.isArray(parsed.eventsList)
+      ? parsed.eventsList
+      : DEFAULT_DYNAMIC_CONTENT.eventsList,
+    standardsList: Array.isArray(parsed.standardsList)
+      ? parsed.standardsList
+      : DEFAULT_DYNAMIC_CONTENT.standardsList,
+    certificationsList: Array.isArray(parsed.certificationsList)
+      ? parsed.certificationsList
+      : DEFAULT_DYNAMIC_CONTENT.certificationsList,
+    hallOfFameList: Array.isArray(parsed.hallOfFameList)
+      ? parsed.hallOfFameList
+      : DEFAULT_DYNAMIC_CONTENT.hallOfFameList,
+    breedersList: Array.isArray(parsed.breedersList)
+      ? parsed.breedersList
+      : DEFAULT_DYNAMIC_CONTENT.breedersList,
+    championsList: mergeWithCanonicalChampions(parsed.championsList),
+    specialEditionList: Array.isArray(parsed.specialEditionList)
+      ? parsed.specialEditionList
+      : DEFAULT_DYNAMIC_CONTENT.specialEditionList,
+    certificateOffsets: parsed.certificateOffsets || DEFAULT_DYNAMIC_CONTENT.certificateOffsets,
+    sectionVisibility: {
+      ...DEFAULT_DYNAMIC_CONTENT.sectionVisibility,
+      ...(parsed.sectionVisibility || {}),
+    },
+  };
+  return sanitizeDynamicConfig(merged);
+}
+
 export function getDynamicContent(): DynamicContentConfig {
-  if (inMemoryConfig) return sanitizeDynamicConfig(inMemoryConfig);
+  if (inMemoryConfig) return inMemoryConfig;
   if (typeof window === 'undefined') return DEFAULT_DYNAMIC_CONTENT;
 
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      const rawMerged: DynamicContentConfig = { 
-        ...DEFAULT_DYNAMIC_CONTENT, 
-        ...parsed,
-        customTextOverrides: parsed.customTextOverrides || {},
-        executiveTeam: Array.isArray(parsed.executiveTeam)
-          ? parsed.executiveTeam
-          : DEFAULT_DYNAMIC_CONTENT.executiveTeam,
-        representativesList: Array.isArray(parsed.representativesList)
-          ? parsed.representativesList
-          : DEFAULT_DYNAMIC_CONTENT.representativesList,
-        judgesList: Array.isArray(parsed.judgesList)
-          ? parsed.judgesList
-          : DEFAULT_DYNAMIC_CONTENT.judgesList,
-        galleryPhotos: Array.isArray(parsed.galleryPhotos)
-          ? parsed.galleryPhotos
-          : DEFAULT_DYNAMIC_CONTENT.galleryPhotos,
-        breedsList: Array.isArray(parsed.breedsList)
-          ? parsed.breedsList
-          : DEFAULT_DYNAMIC_CONTENT.breedsList,
-        eventsList: Array.isArray(parsed.eventsList)
-          ? parsed.eventsList
-          : DEFAULT_DYNAMIC_CONTENT.eventsList,
-        standardsList: Array.isArray(parsed.standardsList)
-          ? parsed.standardsList
-          : DEFAULT_DYNAMIC_CONTENT.standardsList,
-        certificationsList: Array.isArray(parsed.certificationsList)
-          ? parsed.certificationsList
-          : DEFAULT_DYNAMIC_CONTENT.certificationsList,
-        hallOfFameList: Array.isArray(parsed.hallOfFameList)
-          ? parsed.hallOfFameList
-          : DEFAULT_DYNAMIC_CONTENT.hallOfFameList,
-        breedersList: Array.isArray(parsed.breedersList)
-          ? parsed.breedersList
-          : DEFAULT_DYNAMIC_CONTENT.breedersList,
-        championsList: mergeWithCanonicalChampions(parsed.championsList),
-        specialEditionList: Array.isArray(parsed.specialEditionList)
-          ? parsed.specialEditionList
-          : DEFAULT_DYNAMIC_CONTENT.specialEditionList,
-        certificateOffsets: parsed.certificateOffsets || DEFAULT_DYNAMIC_CONTENT.certificateOffsets,
-        sectionVisibility: {
-          ...DEFAULT_DYNAMIC_CONTENT.sectionVisibility,
-          ...(parsed.sectionVisibility || {})
-        }
-      };
-      inMemoryConfig = sanitizeDynamicConfig(rawMerged);
+      inMemoryConfig = mergeParsedConfig(parsed);
       return inMemoryConfig;
     }
   } catch (e) {
@@ -1441,73 +1515,86 @@ export function getDynamicContent(): DynamicContentConfig {
   return inMemoryConfig!;
 }
 
-export async function fetchDynamicContentFromSupabase(): Promise<DynamicContentConfig> {
-  try {
-    const res = await fetchCmsConfigDirect();
+// Shared fetch coalescing so 18+ mounted components share 1 single network call
+let inFlightFetchPromise: Promise<DynamicContentConfig> | null = null;
+let lastFetchTimestamp = 0;
 
-    if (res.success && res.data) {
-      try {
-        const parsed = JSON.parse(res.data);
-        const merged: DynamicContentConfig = {
-          ...DEFAULT_DYNAMIC_CONTENT,
-          ...parsed,
-          customTextOverrides: parsed.customTextOverrides || {},
-          executiveTeam: Array.isArray(parsed.executiveTeam)
-            ? parsed.executiveTeam
-            : DEFAULT_DYNAMIC_CONTENT.executiveTeam,
-          representativesList: Array.isArray(parsed.representativesList)
-            ? parsed.representativesList
-            : DEFAULT_DYNAMIC_CONTENT.representativesList,
-          judgesList: Array.isArray(parsed.judgesList)
-            ? parsed.judgesList
-            : DEFAULT_DYNAMIC_CONTENT.judgesList,
-          galleryPhotos: Array.isArray(parsed.galleryPhotos)
-            ? parsed.galleryPhotos
-            : DEFAULT_DYNAMIC_CONTENT.galleryPhotos,
-          breedsList: Array.isArray(parsed.breedsList)
-            ? parsed.breedsList
-            : DEFAULT_DYNAMIC_CONTENT.breedsList,
-          eventsList: Array.isArray(parsed.eventsList)
-            ? parsed.eventsList
-            : DEFAULT_DYNAMIC_CONTENT.eventsList,
-          standardsList: Array.isArray(parsed.standardsList)
-            ? parsed.standardsList
-            : DEFAULT_DYNAMIC_CONTENT.standardsList,
-          certificationsList: Array.isArray(parsed.certificationsList)
-            ? parsed.certificationsList
-            : DEFAULT_DYNAMIC_CONTENT.certificationsList,
-          hallOfFameList: Array.isArray(parsed.hallOfFameList)
-            ? parsed.hallOfFameList
-            : DEFAULT_DYNAMIC_CONTENT.hallOfFameList,
-          breedersList: Array.isArray(parsed.breedersList)
-            ? parsed.breedersList
-            : DEFAULT_DYNAMIC_CONTENT.breedersList,
-          championsList: mergeWithCanonicalChampions(parsed.championsList),
-          specialEditionList: Array.isArray(parsed.specialEditionList)
-            ? parsed.specialEditionList
-            : DEFAULT_DYNAMIC_CONTENT.specialEditionList,
-          certificateOffsets: parsed.certificateOffsets || DEFAULT_DYNAMIC_CONTENT.certificateOffsets,
-          sectionVisibility: {
-            ...DEFAULT_DYNAMIC_CONTENT.sectionVisibility,
-            ...(parsed.sectionVisibility || {})
-          }
-        };
+// Debounced background save state (prevents typing lag on 5MB+ CMS payloads)
+let pendingSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingSaveConfig: DynamicContentConfig | null = null;
 
-        const cleanConfig = sanitizeDynamicConfig(merged);
-        inMemoryConfig = cleanConfig;
-        safeSetLocalStorage(STORAGE_KEY, cleanConfig);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent(EVENT_KEY, { detail: cleanConfig }));
-        }
-        return cleanConfig;
-      } catch (parseErr) {
-        console.warn('Error parsing CMS json from Supabase:', parseErr);
-      }
-    }
-  } catch (err) {
-    console.warn('Network error fetching dynamic content from Supabase:', err);
+function clearPendingBackgroundSave() {
+  if (pendingSaveTimer) {
+    clearTimeout(pendingSaveTimer);
+    pendingSaveTimer = null;
   }
-  return getDynamicContent();
+  pendingSaveConfig = null;
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => {
+    if (pendingSaveConfig) {
+      const cfg = pendingSaveConfig;
+      clearPendingBackgroundSave();
+      safeSetLocalStorage(STORAGE_KEY, cfg);
+      try {
+        const blob = new Blob([JSON.stringify({ config: cfg })], {
+          type: 'application/json',
+        });
+        navigator.sendBeacon?.('/api/cms/save', blob);
+      } catch {}
+    }
+  });
+}
+
+export async function fetchDynamicContentFromSupabase(force = false): Promise<DynamicContentConfig> {
+  const now = Date.now();
+  if (!force && inFlightFetchPromise) {
+    return inFlightFetchPromise;
+  }
+  if (!force && inMemoryConfig && now - lastFetchTimestamp < 2500) {
+    return inMemoryConfig;
+  }
+
+  inFlightFetchPromise = (async () => {
+    try {
+      const res = await fetchCmsConfigDirect();
+      lastFetchTimestamp = Date.now();
+
+      if (res.success && res.data) {
+        try {
+          const parsed = JSON.parse(res.data);
+          const cleanConfig = mergeParsedConfig(parsed);
+
+          // If there is an unsaved local edit literally in flight that is strictly newer, keep it
+          if (
+            pendingSaveConfig &&
+            inMemoryConfig?._updatedAt &&
+            cleanConfig._updatedAt &&
+            inMemoryConfig._updatedAt > cleanConfig._updatedAt
+          ) {
+            return inMemoryConfig;
+          }
+
+          inMemoryConfig = cleanConfig;
+          safeSetLocalStorage(STORAGE_KEY, cleanConfig);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent(EVENT_KEY, { detail: cleanConfig }));
+          }
+          return cleanConfig;
+        } catch (parseErr) {
+          console.warn('Error parsing CMS json from Supabase:', parseErr);
+        }
+      }
+    } catch (err) {
+      console.warn('Network error fetching dynamic content from Supabase:', err);
+    } finally {
+      inFlightFetchPromise = null;
+    }
+    return getDynamicContent();
+  })();
+
+  return inFlightFetchPromise;
 }
 
 /**
@@ -1517,15 +1604,17 @@ export async function fetchDynamicContentFromSupabase(): Promise<DynamicContentC
 export async function saveDynamicContentRealtime(
   content: Partial<DynamicContentConfig>
 ): Promise<{ success: boolean; data: DynamicContentConfig; error?: string }> {
+  clearPendingBackgroundSave();
   const current = getDynamicContent();
   const updated: DynamicContentConfig = {
     ...current,
     ...content,
+    _updatedAt: Date.now(),
     championsList: content.championsList ? mergeWithCanonicalChampions(content.championsList) : current.championsList,
     sectionVisibility: {
       ...current.sectionVisibility,
-      ...(content.sectionVisibility || {})
-    }
+      ...(content.sectionVisibility || {}),
+    },
   };
 
   const cleanConfig = sanitizeDynamicConfig(updated);
@@ -1539,7 +1628,6 @@ export async function saveDynamicContentRealtime(
     safeSetLocalStorage(STORAGE_KEY, cleanConfig);
   }
 
-  // Persist directly to Supabase cloud table 'franquicias' (prefijo: 'CMS_CONFIG')
   const jsonStr = JSON.stringify(cleanConfig);
   const result = await saveCmsConfigDirect(jsonStr);
 
@@ -1548,7 +1636,7 @@ export async function saveDynamicContentRealtime(
     return {
       success: false,
       data: cleanConfig,
-      error: result.error || 'No se pudo guardar en Supabase. Verifica tu conexión.'
+      error: result.error || 'No se pudo guardar en Supabase. Verifica tu conexión.',
     };
   }
 
@@ -1556,37 +1644,50 @@ export async function saveDynamicContentRealtime(
 }
 
 /**
- * Synchronous local save + background Supabase write for backward compatibility
+ * Instant synchronous in-memory/UI update with debounced (650ms) LocalStorage & Supabase persistence
+ * so typing in CMS/editor inputs remains zero-lag even with rich configurations.
  */
 export function saveDynamicContent(content: Partial<DynamicContentConfig>): DynamicContentConfig {
   const current = getDynamicContent();
   const updated: DynamicContentConfig = {
     ...current,
     ...content,
+    _updatedAt: Date.now(),
     championsList: content.championsList ? mergeWithCanonicalChampions(content.championsList) : current.championsList,
     sectionVisibility: {
       ...current.sectionVisibility,
-      ...(content.sectionVisibility || {})
-    }
+      ...(content.sectionVisibility || {}),
+    },
   };
 
   const cleanConfig = sanitizeDynamicConfig(updated);
   inMemoryConfig = cleanConfig;
+  pendingSaveConfig = cleanConfig;
 
   if (typeof window !== 'undefined') {
     try {
       window.dispatchEvent(new CustomEvent(EVENT_KEY, { detail: cleanConfig }));
     } catch {}
-    safeSetLocalStorage(STORAGE_KEY, cleanConfig);
   }
 
-  // Background write to Supabase
-  const jsonStr = JSON.stringify(cleanConfig);
-  saveCmsConfigDirect(jsonStr).then((res) => {
-    if (!res.success) {
-      console.warn('Background Supabase write warning:', res.error);
-    }
-  });
+  if (pendingSaveTimer) {
+    clearTimeout(pendingSaveTimer);
+  }
+
+  pendingSaveTimer = setTimeout(() => {
+    const configToFlush = pendingSaveConfig;
+    pendingSaveTimer = null;
+    pendingSaveConfig = null;
+    if (!configToFlush) return;
+
+    safeSetLocalStorage(STORAGE_KEY, configToFlush);
+    const jsonStr = JSON.stringify(configToFlush);
+    saveCmsConfigDirect(jsonStr).then((res) => {
+      if (!res.success) {
+        console.warn('Background Supabase write warning:', res.error);
+      }
+    });
+  }, 650);
 
   return cleanConfig;
 }
@@ -1639,9 +1740,9 @@ export async function syncTeamToSupabase(teamData: {
 }
 
 /**
- * Compresses an image file client-side so base64 strings stay below 40KB
+ * Compresses an image file client-side so transfers are fast and lightweight
  */
-async function compressImageFile(file: File, maxDim: number = 600, quality: number = 0.8): Promise<string> {
+async function compressImageFile(file: File, maxDim: number = 800, quality: number = 0.8): Promise<string> {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -1682,8 +1783,7 @@ async function compressImageFile(file: File, maxDim: number = 600, quality: numb
  * or falls back to direct client Supabase upload / compressed DataURL.
  */
 export async function uploadCmsImage(file: File): Promise<string> {
-  // Compress image first for quick transfer and optimal performance
-  const compressedDataUrl = await compressImageFile(file, 800, 0.85);
+  const compressedDataUrl = await compressImageFile(file, 800, 0.8);
 
   // 1. Primary: Server-side Supabase Storage upload (bypasses browser RLS and guarantees public URL in fotos-registros)
   try {
@@ -1733,118 +1833,175 @@ export async function uploadCmsImage(file: File): Promise<string> {
 }
 
 export function resetDynamicContent(): DynamicContentConfig {
+  clearPendingBackgroundSave();
+  const nextDef: DynamicContentConfig = {
+    ...DEFAULT_DYNAMIC_CONTENT,
+    _updatedAt: Date.now(),
+  };
   if (typeof window !== 'undefined') {
     try {
       localStorage.removeItem(STORAGE_KEY);
-      window.dispatchEvent(new CustomEvent(EVENT_KEY, { detail: DEFAULT_DYNAMIC_CONTENT }));
+      window.dispatchEvent(new CustomEvent(EVENT_KEY, { detail: nextDef }));
     } catch (e) {}
   }
 
   // Also reset in Supabase
   try {
-    const jsonStr = JSON.stringify(DEFAULT_DYNAMIC_CONTENT);
+    const jsonStr = JSON.stringify(nextDef);
     saveCmsConfigDirect(jsonStr).then();
   } catch (err) {}
 
-  inMemoryConfig = DEFAULT_DYNAMIC_CONTENT;
-  return DEFAULT_DYNAMIC_CONTENT;
+  inMemoryConfig = nextDef;
+  return nextDef;
+}
+
+// =========================================================================
+// SINGLETON REALTIME, VISIBILITY & DOM OVERRIDE MANAGER (shared across all hooks)
+// =========================================================================
+let activeHookSubscribers = 0;
+let sharedUnsubscribeRealtime: (() => void) | null = null;
+let sharedVisibilityCleanup: (() => void) | null = null;
+let sharedMutationObserver: MutationObserver | null = null;
+let lastAppliedOverridesRef: Record<string, string> | undefined;
+let lastAppliedScale: string | undefined;
+
+function ensureSharedSyncListeners() {
+  if (typeof window === 'undefined') return;
+
+  if (!sharedUnsubscribeRealtime) {
+    sharedUnsubscribeRealtime = subscribeToCmsConfig((newJsonStr) => {
+      try {
+        const parsed = JSON.parse(newJsonStr);
+        const cleanConfig = mergeParsedConfig(parsed);
+        inMemoryConfig = cleanConfig;
+        safeSetLocalStorage(STORAGE_KEY, cleanConfig);
+        window.dispatchEvent(new CustomEvent(EVENT_KEY, { detail: cleanConfig }));
+      } catch (err) {
+        console.warn('Realtime parse incoming config error:', err);
+      }
+    });
+  }
+
+  if (!sharedVisibilityCleanup) {
+    let lastFocusFetch = 0;
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState && document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastFocusFetch < 6000) return;
+      lastFocusFetch = now;
+      fetchDynamicContentFromSupabase(true);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    window.addEventListener('online', handleVisibilityOrFocus);
+
+    sharedVisibilityCleanup = () => {
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      window.removeEventListener('online', handleVisibilityOrFocus);
+    };
+  }
+
+  if (!sharedMutationObserver && typeof MutationObserver !== 'undefined') {
+    let domTimer: ReturnType<typeof setTimeout> | null = null;
+    const rootEl = document.getElementById('root') || document.body;
+    if (rootEl) {
+      sharedMutationObserver = new MutationObserver(() => {
+        const current = getDynamicContent();
+        if (!current.customTextOverrides || Object.keys(current.customTextOverrides).length === 0) return;
+        if (domTimer) clearTimeout(domTimer);
+        domTimer = setTimeout(() => {
+          applyCustomTextOverridesToDom(current.customTextOverrides);
+        }, 120);
+      });
+      sharedMutationObserver.observe(rootEl, { childList: true, subtree: true });
+    }
+  }
+}
+
+function teardownSharedSyncListenersIfUnused() {
+  if (activeHookSubscribers > 0) return;
+  if (sharedUnsubscribeRealtime) {
+    sharedUnsubscribeRealtime();
+    sharedUnsubscribeRealtime = null;
+  }
+  if (sharedVisibilityCleanup) {
+    sharedVisibilityCleanup();
+    sharedVisibilityCleanup = null;
+  }
+  if (sharedMutationObserver) {
+    sharedMutationObserver.disconnect();
+    sharedMutationObserver = null;
+  }
 }
 
 export function useDynamicContent() {
   const [content, setContent] = useState<DynamicContentConfig>(getDynamicContent);
   const [isLoadingSupabase, setIsLoadingSupabase] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
-    const handleUpdate = () => {
-      setContent(getDynamicContent());
-    };
-    window.addEventListener(EVENT_KEY, handleUpdate);
-    window.addEventListener('storage', handleUpdate);
+    isMountedRef.current = true;
+    activeHookSubscribers++;
+    ensureSharedSyncListeners();
 
-    // 1. Initial hydration from Supabase on mount
+    const handleUpdate = (e: Event) => {
+      const customEv = e as CustomEvent<DynamicContentConfig>;
+      if (customEv?.detail) {
+        setContent(customEv.detail);
+      } else {
+        setContent(getDynamicContent());
+      }
+    };
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          const merged = mergeParsedConfig(parsed);
+          inMemoryConfig = merged;
+          setContent(merged);
+        } catch {}
+      }
+    };
+
+    window.addEventListener(EVENT_KEY, handleUpdate);
+    window.addEventListener('storage', handleStorage);
+
+    // Coalesced initial hydration from Supabase
     setIsLoadingSupabase(true);
     fetchDynamicContentFromSupabase()
       .then((remoteConfig) => {
-        setContent(remoteConfig);
+        if (isMountedRef.current) {
+          setContent(remoteConfig);
+        }
       })
       .finally(() => {
-        setIsLoadingSupabase(false);
+        if (isMountedRef.current) {
+          setIsLoadingSupabase(false);
+        }
       });
 
-    // 2. Real-time subscription: syncs when anyone saves from any browser/device
-    const unsubscribeRealtime = subscribeToCmsConfig((newJsonStr) => {
-      try {
-        const parsed = JSON.parse(newJsonStr);
-        const merged: DynamicContentConfig = {
-          ...DEFAULT_DYNAMIC_CONTENT,
-          ...parsed,
-          customTextOverrides: parsed.customTextOverrides || {},
-          executiveTeam: Array.isArray(parsed.executiveTeam)
-            ? parsed.executiveTeam
-            : DEFAULT_DYNAMIC_CONTENT.executiveTeam,
-          representativesList: Array.isArray(parsed.representativesList)
-            ? parsed.representativesList
-            : DEFAULT_DYNAMIC_CONTENT.representativesList,
-          judgesList: Array.isArray(parsed.judgesList)
-            ? parsed.judgesList
-            : DEFAULT_DYNAMIC_CONTENT.judgesList,
-          galleryPhotos: Array.isArray(parsed.galleryPhotos)
-            ? parsed.galleryPhotos
-            : DEFAULT_DYNAMIC_CONTENT.galleryPhotos,
-          breedsList: Array.isArray(parsed.breedsList)
-            ? parsed.breedsList
-            : DEFAULT_DYNAMIC_CONTENT.breedsList,
-          eventsList: Array.isArray(parsed.eventsList)
-            ? parsed.eventsList
-            : DEFAULT_DYNAMIC_CONTENT.eventsList,
-          standardsList: Array.isArray(parsed.standardsList)
-            ? parsed.standardsList
-            : DEFAULT_DYNAMIC_CONTENT.standardsList,
-          certificationsList: Array.isArray(parsed.certificationsList)
-            ? parsed.certificationsList
-            : DEFAULT_DYNAMIC_CONTENT.certificationsList,
-          hallOfFameList: Array.isArray(parsed.hallOfFameList)
-            ? parsed.hallOfFameList
-            : DEFAULT_DYNAMIC_CONTENT.hallOfFameList,
-          breedersList: Array.isArray(parsed.breedersList)
-            ? parsed.breedersList
-            : DEFAULT_DYNAMIC_CONTENT.breedersList,
-          championsList: mergeWithCanonicalChampions(parsed.championsList),
-          specialEditionList: Array.isArray(parsed.specialEditionList)
-            ? parsed.specialEditionList
-            : DEFAULT_DYNAMIC_CONTENT.specialEditionList,
-          certificateOffsets: parsed.certificateOffsets || DEFAULT_DYNAMIC_CONTENT.certificateOffsets,
-          sectionVisibility: {
-            ...DEFAULT_DYNAMIC_CONTENT.sectionVisibility,
-            ...(parsed.sectionVisibility || {})
-          }
-        };
-
-        const cleanConfig = sanitizeDynamicConfig(merged);
-        inMemoryConfig = cleanConfig;
-        safeSetLocalStorage(STORAGE_KEY, cleanConfig);
-        setContent(cleanConfig);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent(EVENT_KEY, { detail: cleanConfig }));
-        }
-      } catch (err) {
-        console.warn('Realtime parse incoming config error:', err);
-      }
-    });
-
     return () => {
+      isMountedRef.current = false;
+      activeHookSubscribers = Math.max(0, activeHookSubscribers - 1);
       window.removeEventListener(EVENT_KEY, handleUpdate);
-      window.removeEventListener('storage', handleUpdate);
-      unsubscribeRealtime();
+      window.removeEventListener('storage', handleStorage);
+      teardownSharedSyncListenersIfUnused();
     };
   }, []);
 
   useEffect(() => {
-    if (content.customTextOverrides) {
+    if (content.customTextOverrides && content.customTextOverrides !== lastAppliedOverridesRef) {
+      lastAppliedOverridesRef = content.customTextOverrides;
       applyCustomTextOverridesToDom(content.customTextOverrides);
     }
-    applyTextScaleToDom(content.textScale);
+    if (content.textScale !== lastAppliedScale) {
+      lastAppliedScale = content.textScale;
+      applyTextScaleToDom(content.textScale);
+    }
   }, [content.customTextOverrides, content.textScale]);
 
   const saveContentRealtime = async (patch: Partial<DynamicContentConfig>) => {
@@ -1853,7 +2010,9 @@ export function useDynamicContent() {
       const res = await saveDynamicContentRealtime(patch);
       return res;
     } finally {
-      setIsSaving(false);
+      if (isMountedRef.current) {
+        setIsSaving(false);
+      }
     }
   };
 
@@ -1863,9 +2022,10 @@ export function useDynamicContent() {
     saveContentRealtime,
     saveDynamicContentRealtime,
     resetContent: resetDynamicContent,
-    refreshFromSupabase: fetchDynamicContentFromSupabase,
+    refreshFromSupabase: () => fetchDynamicContentFromSupabase(true),
     isLoadingSupabase,
     isSaving,
   };
 }
+
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useDeferredValue } from 'react';
 import { SAMPLE_DOGS, DogRecord, UPCOMING_EVENTS, BREEDERS_DIRECTORY } from '../data/registryData';
 import { useAuth } from '../hooks/useAuth';
 import { useRegistry } from '../context/RegistryContext';
@@ -15,6 +15,7 @@ import {
   saveDynamicContentAsync,
   saveDynamicContentRealtime,
   applyCustomTextOverridesToDom,
+  assignDeterministicDomIds,
   applyTextScaleToDom,
   uploadCmsImage,
   DEFAULT_CERTIFICATE_OFFSETS
@@ -316,10 +317,12 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
   const [searchSelectedDogIndex, setSearchSelectedDogIndex] = useState(0);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
 
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+
   // Reset selected dog index when search or filter changes
   useEffect(() => {
     setSearchSelectedDogIndex(0);
-  }, [searchQuery, breedFilter]);
+  }, [deferredSearchQuery, breedFilter]);
 
   // Sync default selected dog once dogs load
   useEffect(() => {
@@ -328,11 +331,11 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
     }
   }, [dogs, selectedDog.regNumber]);
 
-  // Filtered Dogs calculation with smart prefix and microchip handling
-  const filteredDogs = dogs.filter((dog) => {
-    const raw = searchQuery.trim().toUpperCase();
+  // Filtered Dogs calculation with smart prefix and microchip handling (memoized & deferred)
+  const filteredDogs = useMemo(() => {
+    const raw = deferredSearchQuery.trim().toUpperCase();
     if (!raw) {
-      return breedFilter === 'ALL' || dog.breed === breedFilter;
+      return breedFilter === 'ALL' ? dogs : dogs.filter((dog) => dog.breed === breedFilter);
     }
 
     const cleanAlnum = raw.replace(/[^A-Z0-9]/g, '');
@@ -340,32 +343,37 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
     const strippedInbr = raw.replace(/^(INBR|REG|CHIP|ISO)[-_\s:]*/i, '').trim();
     const strippedInbrAlnum = strippedInbr.replace(/[^A-Z0-9]/g, '');
 
-    const dReg = (dog.regNumber || '').toUpperCase().trim();
-    const dRegAlnum = dReg.replace(/[^A-Z0-9]/g, '');
-    const dChip = (dog.microchip || '').toUpperCase().trim();
-    const dChipDigits = dChip.replace(/\D/g, '');
-    const dName = (dog.name || '').toUpperCase().trim();
-    const dBreed = (dog.breed || '').toUpperCase().trim();
-    const dOwner = (dog.owner || '').toUpperCase().trim();
+    return dogs.filter((dog) => {
+      const matchesBreed = breedFilter === 'ALL' || dog.breed === breedFilter;
+      if (!matchesBreed) return false;
 
-    const matchesQuery =
-      dName.includes(raw) ||
-      dReg.includes(raw) ||
-      dChip.includes(raw) ||
-      dBreed.includes(raw) ||
-      dOwner.includes(raw) ||
-      (strippedInbr.length >= 2 && (dReg === strippedInbr || dReg.includes(strippedInbr))) ||
-      (strippedInbrAlnum.length >= 3 && dRegAlnum.includes(strippedInbrAlnum)) ||
-      (digitsOnly.length >= 5 && (dChipDigits === digitsOnly || dChipDigits.includes(digitsOnly))) ||
-      (cleanAlnum.length >= 3 && (dRegAlnum.includes(cleanAlnum) || dChipDigits.includes(cleanAlnum)));
+      const dReg = (dog.regNumber || '').toUpperCase().trim();
+      const dRegAlnum = dReg.replace(/[^A-Z0-9]/g, '');
+      const dChip = (dog.microchip || '').toUpperCase().trim();
+      const dChipDigits = dChip.replace(/\D/g, '');
+      const dName = (dog.name || '').toUpperCase().trim();
+      const dBreed = (dog.breed || '').toUpperCase().trim();
+      const dOwner = (dog.owner || '').toUpperCase().trim();
 
-    const matchesBreed = breedFilter === 'ALL' || dog.breed === breedFilter;
+      return (
+        dName.includes(raw) ||
+        dReg.includes(raw) ||
+        dChip.includes(raw) ||
+        dBreed.includes(raw) ||
+        dOwner.includes(raw) ||
+        (strippedInbr.length >= 2 && (dReg === strippedInbr || dReg.includes(strippedInbr))) ||
+        (strippedInbrAlnum.length >= 3 && dRegAlnum.includes(strippedInbrAlnum)) ||
+        (digitsOnly.length >= 5 && (dChipDigits === digitsOnly || dChipDigits.includes(digitsOnly))) ||
+        (cleanAlnum.length >= 3 && (dRegAlnum.includes(cleanAlnum) || dChipDigits.includes(cleanAlnum)))
+      );
+    });
+  }, [dogs, deferredSearchQuery, breedFilter]);
 
-    return matchesQuery && matchesBreed;
-  });
-
-  // Extract unique breeds for filter
-  const uniqueBreeds = Array.from(new Set(dogs.map((d) => d.breed))).filter(Boolean);
+  // Extract unique breeds for filter (memoized)
+  const uniqueBreeds = useMemo(
+    () => Array.from(new Set(dogs.map((d) => d.breed))).filter(Boolean),
+    [dogs]
+  );
 
   // =========================================================================
   // 2. GENERADOR DE DOCUMENTOS (PDF / JPG) STATE
@@ -769,10 +777,14 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
   // =========================================================================
   const [formData, setFormData] = useState<DynamicContentConfig>(content);
   const [contentSavedFeedback, setContentSavedFeedback] = useState(false);
+  const lastRemoteSyncTsRef = useRef<number | undefined>(content._updatedAt);
 
-  // Keep form in sync when content updates
+  // Sync formData only when remote Supabase config changes, not while user is actively editing formData
   useEffect(() => {
-    setFormData(content);
+    if (content._updatedAt && content._updatedAt !== lastRemoteSyncTsRef.current) {
+      lastRemoteSyncTsRef.current = content._updatedAt;
+      setFormData(content);
+    }
   }, [content]);
 
   const handleSaveDynamicContent = async (e: React.FormEvent) => {
@@ -849,11 +861,17 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
   const [scannedItems, setScannedItems] = useState<ScannedDomItem[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [domSearchQuery, setDomSearchQuery] = useState('');
+  const deferredDomSearchQuery = useDeferredValue(domSearchQuery);
   const [domSectionFilter, setDomSectionFilter] = useState('ALL');
   const [domTagFilter, setDomTagFilter] = useState('ALL');
+  const [domRenderLimit, setDomRenderLimit] = useState(48);
   const [editedOverrides, setEditedOverrides] = useState<Record<string, string>>({});
   const [savingDomChanges, setSavingDomChanges] = useState(false);
   const [domSaveSuccess, setDomSaveSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDomRenderLimit(48);
+  }, [deferredDomSearchQuery, domSectionFilter, domTagFilter]);
 
   const scanDom = () => {
     if (typeof document === 'undefined') return;
@@ -861,6 +879,7 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
 
     setTimeout(() => {
       try {
+        assignDeterministicDomIds();
         const items: ScannedDomItem[] = [];
         const sectionsMap: { [key: string]: string } = {
           hero: 'Portada (Hero)',
@@ -1263,25 +1282,31 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
   const isMasterUser = user?.role === 'MASTER';
   const isCurrentRepAllowedToPrint = isMasterUser || user?.canPrint;
 
-  const filteredDomItems = scannedItems.filter((item) => {
-    const matchesSearch =
-      !domSearchQuery ||
-      item.text.toLowerCase().includes(domSearchQuery.toLowerCase()) ||
-      item.section.toLowerCase().includes(domSearchQuery.toLowerCase()) ||
-      item.tag.toLowerCase().includes(domSearchQuery.toLowerCase());
+  const filteredDomItems = useMemo(() => {
+    const q = deferredDomSearchQuery.toLowerCase();
+    return scannedItems.filter((item) => {
+      const matchesSearch =
+        !q ||
+        item.text.toLowerCase().includes(q) ||
+        item.section.toLowerCase().includes(q) ||
+        item.tag.toLowerCase().includes(q);
 
-    const matchesSection = domSectionFilter === 'ALL' || item.section === domSectionFilter;
+      const matchesSection = domSectionFilter === 'ALL' || item.section === domSectionFilter;
 
-    const matchesTag =
-      domTagFilter === 'ALL' ||
-      (domTagFilter === 'TITLES' && ['H1', 'H2', 'H3', 'H4', 'H5'].includes(item.tag)) ||
-      (domTagFilter === 'PARAGRAPHS' && item.tag === 'P') ||
-      (domTagFilter === 'OTHER' && !['H1', 'H2', 'H3', 'H4', 'H5', 'P'].includes(item.tag));
+      const matchesTag =
+        domTagFilter === 'ALL' ||
+        (domTagFilter === 'TITLES' && ['H1', 'H2', 'H3', 'H4', 'H5'].includes(item.tag)) ||
+        (domTagFilter === 'PARAGRAPHS' && item.tag === 'P') ||
+        (domTagFilter === 'OTHER' && !['H1', 'H2', 'H3', 'H4', 'H5', 'P'].includes(item.tag));
 
-    return matchesSearch && matchesSection && matchesTag;
-  });
+      return matchesSearch && matchesSection && matchesTag;
+    });
+  }, [scannedItems, deferredDomSearchQuery, domSectionFilter, domTagFilter]);
 
-  const availableDomSections = Array.from(new Set(scannedItems.map((i) => i.section)));
+  const availableDomSections = useMemo(
+    () => Array.from(new Set(scannedItems.map((i) => i.section))),
+    [scannedItems]
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/95 backdrop-blur-md overflow-hidden animate-fadeIn print:p-0 print:bg-white print:overflow-visible">
@@ -2192,11 +2217,16 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
                               onChange={(e) => setSearchSelectedDogIndex(Number(e.target.value))}
                               className="px-2.5 py-1.5 rounded-xl bg-black border border-[#D4AF37]/70 text-xs text-[#FFE885] font-mono focus:outline-none max-w-[220px] truncate"
                             >
-                              {filteredDogs.map((d, i) => (
+                              {filteredDogs.slice(0, 150).map((d, i) => (
                                 <option key={d.regNumber || i} value={i}>
                                   {i + 1}. {d.name} ({d.regNumber})
                                 </option>
                               ))}
+                              {safeSearchIndex >= 150 && (
+                                <option value={safeSearchIndex}>
+                                  {safeSearchIndex + 1}. {activeSearchDog.name} ({activeSearchDog.regNumber})
+                                </option>
+                              )}
                             </select>
 
                             <button
@@ -2736,11 +2766,16 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
                       }}
                       className="px-3.5 py-2.5 rounded-xl bg-black border border-[#D4AF37] text-xs text-white max-w-[280px] font-mono focus:outline-none"
                     >
-                      {dogs.map((d) => (
+                      {dogs.slice(0, 150).map((d) => (
                         <option key={d.regNumber} value={d.regNumber}>
                           {d.name} ({d.regNumber})
                         </option>
                       ))}
+                      {!dogs.slice(0, 150).some((d) => d.regNumber === selectedDog.regNumber) && (
+                        <option key={selectedDog.regNumber} value={selectedDog.regNumber}>
+                          {selectedDog.name} ({selectedDog.regNumber})
+                        </option>
+                      )}
                     </select>
                   </div>
                 </div>
@@ -3838,9 +3873,9 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
                       </span>
                     </div>
 
-                    {/* Scanned DOM Items Grid */}
+                    {/* Scanned DOM Items Grid (windowed to keep typing instant) */}
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                      {filteredDomItems.map((item) => {
+                      {filteredDomItems.slice(0, domRenderLimit).map((item) => {
                         const currentVal = editedOverrides[item.id] !== undefined ? editedOverrides[item.id] : item.text;
                         const isModified = currentVal !== item.text;
 
@@ -3912,6 +3947,18 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
                         );
                       })}
                     </div>
+
+                    {filteredDomItems.length > domRenderLimit && (
+                      <div className="flex justify-center pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setDomRenderLimit((prev) => prev + 48)}
+                          className="px-5 py-2.5 rounded-xl bg-[#18140B] border border-[#D4AF37] text-xs font-bold text-[#FFE885] hover:bg-[#241E10] transition-all cursor-pointer"
+                        >
+                          Mostrar más textos ({domRenderLimit} de {filteredDomItems.length})
+                        </button>
+                      </div>
+                    )}
 
                     {filteredDomItems.length === 0 && (
                       <div className="p-12 text-center rounded-2xl bg-[#090909] border border-neutral-800 space-y-3">

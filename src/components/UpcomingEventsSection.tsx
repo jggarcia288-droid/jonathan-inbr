@@ -83,7 +83,16 @@ export const UpcomingEventsSection: React.FC<UpcomingEventsSectionProps> = ({ on
 
         {/* Events Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {UPCOMING_EVENTS.map((event) => (
+          {(content.eventsList && content.eventsList.length > 0 ? content.eventsList : UPCOMING_EVENTS).map((event) => {
+            const judgesDisplay = Array.isArray((event as any).judges)
+              ? (event as any).judges.join(', ')
+              : (event.judges || 'Comité Oficial INBR');
+            const categoriesList: string[] = Array.isArray((event as any).categories) && (event as any).categories.length > 0
+              ? (event as any).categories
+              : ['American Bully', 'Exotic Bull', 'Todas las Razas'];
+            const pointsBadge = (event as any).pointsMultiplier || 'Puntaje Oficial INBR';
+
+            return (
             <div
               key={event.id}
               className="rounded-3xl bg-[#141414] border border-[#C9A86A]/30 overflow-hidden flex flex-col justify-between hover:border-[#C9A86A] hover:shadow-[0_10px_35px_rgba(201,168,106,0.2)] transition-all group"
@@ -95,7 +104,7 @@ export const UpcomingEventsSection: React.FC<UpcomingEventsSectionProps> = ({ on
                     {event.status}
                   </span>
                   <span className="px-2.5 py-1 rounded-md bg-[#C9A86A]/15 text-[#E7C888] border border-[#C9A86A]/30 text-[10px] font-mono font-bold">
-                    {event.pointsMultiplier}
+                    {pointsBadge}
                   </span>
                 </div>
 
@@ -120,7 +129,7 @@ export const UpcomingEventsSection: React.FC<UpcomingEventsSectionProps> = ({ on
 
                 <div className="flex items-center gap-3 text-sm text-neutral-200">
                   <UserCheck className="w-4 h-4 text-[#C9A86A] shrink-0" />
-                  <span>Jueces: <strong className="text-[#E7C888]">{event.judges.join(', ')}</strong></span>
+                  <span>Jueces: <strong className="text-[#E7C888]">{judgesDisplay}</strong></span>
                 </div>
 
                 {/* Categories Tags */}
@@ -129,7 +138,7 @@ export const UpcomingEventsSection: React.FC<UpcomingEventsSectionProps> = ({ on
                     Categorías en Disputa:
                   </span>
                   <div className="flex flex-wrap gap-1.5">
-                    {event.categories.map((cat, i) => (
+                    {categoriesList.map((cat, i) => (
                       <span
                         key={i}
                         className="px-2 py-0.5 rounded bg-black border border-neutral-700 text-neutral-300 text-[10px] font-mono"
@@ -152,7 +161,8 @@ export const UpcomingEventsSection: React.FC<UpcomingEventsSectionProps> = ({ on
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </section>

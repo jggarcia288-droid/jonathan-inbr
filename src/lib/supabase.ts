@@ -487,11 +487,16 @@ export async function saveCmsConfigDirect(jsonString: string): Promise<{ success
     } catch {
       parsedConfig = { raw: jsonString };
     }
+    if (parsedConfig && typeof parsedConfig === 'object' && !parsedConfig._updatedAt) {
+      parsedConfig._updatedAt = Date.now();
+    }
+    const finalJson = JSON.stringify(parsedConfig);
 
-    // 1. First attempt: call local server endpoint (uses Supabase service_role to guarantee storage)
+    // 1. First attempt: call local server endpoint (uses Supabase service_role to guarantee storage + offload base64)
     try {
       const serverRes = await fetch('/api/cms/save', {
         method: 'POST',
+        cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ config: parsedConfig }),
       });
@@ -531,7 +536,7 @@ export async function saveCmsConfigDirect(jsonString: string): Promise<{ success
         const { error: upErr } = await supabase
           .from('franquicias')
           .update({
-            email: jsonString,
+            email: finalJson,
             pais: 'CONFIGURACION_CMS_INBR',
             puede_imprimir: true,
           })
@@ -543,7 +548,7 @@ export async function saveCmsConfigDirect(jsonString: string): Promise<{ success
           .insert({
             pais: 'CONFIGURACION_CMS_INBR',
             prefijo: 'CMS_CONFIG',
-            email: jsonString,
+            email: finalJson,
             puede_imprimir: true,
           });
         mirrorSuccess = !insErr;
@@ -567,24 +572,14 @@ export async function saveCmsConfigDirect(jsonString: string): Promise<{ success
 }
 
 /**
- * Fetches the dynamic CMS JSON configuration directly from Supabase (prioritizing site_settings)
+ * Fetches the dynamic CMS JSON configuration directly from Supabase, bypassing caches
+ * and picking the freshest copy between 'site_settings', '/api/cms/get', and 'franquicias'.
  */
 export async function fetchCmsConfigDirect(): Promise<{ success: boolean; data?: string; error?: string }> {
   try {
-    // 1. Try native 'site_settings' table first
-    const { data: siteData, error: siteErr } = await supabase
-      .from('site_settings')
-      .select('value')
-      .eq('key', 'cms_config')
-      .maybeSingle();
-
-    if (!siteErr && siteData?.value) {
-      return { success: true, data: JSON.stringify(siteData.value) };
-    }
-
-    // 2. Try server endpoint
+    // 1. Try server endpoint first with cache-busting (returns freshest copy with service_role)
     try {
-      const serverRes = await fetch('/api/cms/get');
+      const serverRes = await fetch(`/api/cms/get?t=${Date.now()}`, { cache: 'no-store' });
       if (serverRes.ok) {
         const sJson = await serverRes.json();
         if (sJson.success && sJson.config) {
@@ -593,18 +588,39 @@ export async function fetchCmsConfigDirect(): Promise<{ success: boolean; data?:
       }
     } catch {}
 
-    // 3. Fallback to 'franquicias' table
-    const { data: fData, error: fErr } = await supabase
-      .from('franquicias')
-      .select('email')
-      .eq('prefijo', 'CMS_CONFIG')
-      .maybeSingle();
+    // 2. Fallback: query both 'site_settings' and 'franquicias' directly and pick freshest _updatedAt
+    const [siteRes, franqRes] = await Promise.all([
+      supabase.from('site_settings').select('value').eq('key', 'cms_config').maybeSingle(),
+      supabase.from('franquicias').select('email').eq('prefijo', 'CMS_CONFIG').maybeSingle(),
+    ]);
 
-    if (!fErr && fData?.email) {
-      return { success: true, data: fData.email };
+    let siteObj: any = null;
+    if (!siteRes.error && siteRes.data?.value) {
+      siteObj = typeof siteRes.data.value === 'string'
+        ? JSON.parse(siteRes.data.value)
+        : siteRes.data.value;
     }
 
-    return { success: false, error: siteErr?.message || fErr?.message || 'No se encontró configuración' };
+    let franqObj: any = null;
+    if (!franqRes.error && franqRes.data?.email) {
+      try {
+        franqObj = JSON.parse(franqRes.data.email);
+      } catch {}
+    }
+
+    if (siteObj && franqObj) {
+      const sTs = Number(siteObj._updatedAt) || 0;
+      const fTs = Number(franqObj._updatedAt) || 0;
+      return { success: true, data: JSON.stringify(fTs > sTs ? franqObj : siteObj) };
+    }
+    if (siteObj) {
+      return { success: true, data: JSON.stringify(siteObj) };
+    }
+    if (franqObj) {
+      return { success: true, data: JSON.stringify(franqObj) };
+    }
+
+    return { success: false, error: siteRes.error?.message || franqRes.error?.message || 'No se encontró configuración' };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Error de red con Supabase' };
   }

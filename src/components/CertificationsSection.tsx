@@ -1,9 +1,11 @@
 import React from 'react';
 import { useTranslation } from '../context/LanguageContext';
+import { useDynamicContent } from '../utils/dynamicContent';
 import { Award, ArrowRightLeft, BadgeCheck, Users, CheckCircle2, ShieldCheck, Sparkles } from 'lucide-react';
 
 export const CertificationsSection: React.FC = () => {
   const { t } = useTranslation();
+  const { content } = useDynamicContent();
 
   const certifications = [
     {
@@ -64,10 +66,10 @@ export const CertificationsSection: React.FC = () => {
             </span>
           </div>
           <h2 className="text-3xl sm:text-5xl font-black text-white font-serif-luxury tracking-wide mb-3">
-            Nuestras Certificaciones
+            {content.certificationsTitle || 'Nuestras Certificaciones'}
           </h2>
           <p className="text-neutral-300 text-sm sm:text-base leading-relaxed">
-            Conoce cada uno de los trámites y avales oficiales de INBR: qué representan y para qué sirven a tu criadero.
+            {content.certificationsSubtitle || 'Conoce cada uno de los trámites y avales oficiales de INBR: qué representan y para qué sirven a tu criadero.'}
           </p>
         </div>
 

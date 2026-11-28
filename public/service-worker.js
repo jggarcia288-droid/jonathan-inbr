@@ -1,5 +1,5 @@
 // INBR Service Worker for PWA Offline Caching & Instant Republish Updates
-const CACHE_NAME = 'inbr-cache-v2';
+const CACHE_NAME = 'inbr-cache-v3';
 const STATIC_ASSETS = [
   '/logo-inbr.jpg',
   '/manifest.json'

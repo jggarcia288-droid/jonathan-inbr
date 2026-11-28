@@ -132,8 +132,50 @@ async function startServer() {
     }
   });
 
+  // Helper: offload any heavy base64 data:image strings into Supabase Storage so cms_config stays fast & small on mobile
+  const offloadInlineImages = async (node: any): Promise<any> => {
+    if (typeof node === 'string') {
+      if (node.startsWith('data:image/') && node.length > 12000) {
+        try {
+          const mimeMatch = node.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/);
+          const contentType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+          const ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
+          const cleanBase64 = node.replace(/^data:[^;]+;base64,/, '');
+          const buffer = Buffer.from(cleanBase64, 'base64');
+          const storagePath = `cms_auto_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
+          const { data, error } = await supabaseAdmin.storage
+            .from('fotos-registros')
+            .upload(storagePath, buffer, { contentType, upsert: true, cacheControl: '31536000' });
+          if (!error && data?.path) {
+            const { data: pub } = supabaseAdmin.storage.from('fotos-registros').getPublicUrl(data.path);
+            if (pub?.publicUrl) return pub.publicUrl;
+          }
+        } catch (err) {
+          console.warn('[Server CMS] Inline image offload skipped:', err);
+        }
+      }
+      return node;
+    }
+    if (Array.isArray(node)) {
+      const out = [];
+      for (const item of node) {
+        out.push(await offloadInlineImages(item));
+      }
+      return out;
+    }
+    if (node && typeof node === 'object') {
+      const out: Record<string, any> = {};
+      for (const [k, v] of Object.entries(node)) {
+        out[k] = await offloadInlineImages(v);
+      }
+      return out;
+    }
+    return node;
+  };
+
   // Direct CMS Save to site_settings & franquicias
   app.post('/api/cms/save', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     try {
       const { config } = req.body;
       if (!config) {
@@ -141,11 +183,17 @@ async function startServer() {
         return;
       }
 
+      const offloaded = await offloadInlineImages(config);
+      const stampedConfig = {
+        ...offloaded,
+        _updatedAt: Math.max(Date.now(), Number(offloaded?._updatedAt) || 0),
+      };
+
       // 1. Upsert into site_settings (native JSONB table)
       const { error: settingsErr } = await supabaseAdmin
         .from('site_settings')
         .upsert(
-          { key: 'cms_config', value: config },
+          { key: 'cms_config', value: stampedConfig },
           { onConflict: 'key' }
         );
 
@@ -162,7 +210,7 @@ async function startServer() {
           .eq('prefijo', 'CMS_CONFIG')
           .maybeSingle();
 
-        const jsonStr = JSON.stringify(config);
+        const jsonStr = JSON.stringify(stampedConfig);
         if (existing?.id) {
           const { error: upErr } = await supabaseAdmin
             .from('franquicias')
@@ -184,36 +232,59 @@ async function startServer() {
         return;
       }
 
-      res.json({ success: true });
+      res.json({ success: true, _updatedAt: stampedConfig._updatedAt });
     } catch (err: any) {
       console.error('[Server CMS] Excepción guardando CMS:', err);
       res.status(500).json({ error: err?.message || 'Error guardando CMS' });
     }
   });
 
-  // Direct CMS Fetch from site_settings
+  // Direct CMS Fetch from site_settings & franquicias (returns freshest _updatedAt)
   app.get('/api/cms/get', async (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
     try {
-      const { data, error } = await supabaseAdmin
-        .from('site_settings')
-        .select('value')
-        .eq('key', 'cms_config')
-        .maybeSingle();
+      const [settingsRes, franqRes] = await Promise.all([
+        supabaseAdmin
+          .from('site_settings')
+          .select('value')
+          .eq('key', 'cms_config')
+          .maybeSingle(),
+        supabaseAdmin
+          .from('franquicias')
+          .select('email')
+          .eq('prefijo', 'CMS_CONFIG')
+          .maybeSingle(),
+      ]);
 
-      if (!error && data?.value) {
-        res.json({ success: true, config: data.value });
+      let settingsObj: any = null;
+      if (!settingsRes.error && settingsRes.data?.value) {
+        settingsObj = typeof settingsRes.data.value === 'string'
+          ? JSON.parse(settingsRes.data.value)
+          : settingsRes.data.value;
+      }
+
+      let franqObj: any = null;
+      if (!franqRes.error && franqRes.data?.email) {
+        try {
+          franqObj = JSON.parse(franqRes.data.email);
+        } catch {}
+      }
+
+      if (settingsObj && franqObj) {
+        const sTs = Number(settingsObj._updatedAt) || 0;
+        const fTs = Number(franqObj._updatedAt) || 0;
+        res.json({ success: true, config: fTs > sTs ? franqObj : settingsObj });
         return;
       }
 
-      // Fallback to franquicias
-      const { data: fData } = await supabaseAdmin
-        .from('franquicias')
-        .select('email')
-        .eq('prefijo', 'CMS_CONFIG')
-        .maybeSingle();
+      if (settingsObj) {
+        res.json({ success: true, config: settingsObj });
+        return;
+      }
 
-      if (fData?.email) {
-        res.json({ success: true, config: JSON.parse(fData.email) });
+      if (franqObj) {
+        res.json({ success: true, config: franqObj });
         return;
       }
 

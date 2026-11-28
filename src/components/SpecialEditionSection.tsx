@@ -114,7 +114,7 @@ export const SpecialEditionSection: React.FC = () => {
           </div>
 
           <h2 className="text-3xl sm:text-5xl font-black text-white font-serif-luxury tracking-wide mb-3 uppercase">
-            Edición Especial INBR
+            {content.specialEditionTitle || 'Edición Especial INBR'}
           </h2>
 
           <p className="text-neutral-300 text-sm sm:text-base leading-relaxed">

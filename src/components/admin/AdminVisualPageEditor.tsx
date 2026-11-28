@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   useDynamicContent, 
   DynamicBreedCardItem, 
@@ -158,9 +158,15 @@ export const AdminVisualPageEditor: React.FC = () => {
       : defaultBreeds;
   });
 
-  // Sync breedsList when content hydrates from Supabase
+  const lastLocalBreedsRef = useRef<ExtendedBreedItem[] | null>(null);
+
+  // Sync breedsList when content hydrates externally from Supabase (not local echo)
   useEffect(() => {
-    if (content.bullBreedsList && content.bullBreedsList.length > 0) {
+    if (
+      content.bullBreedsList &&
+      content.bullBreedsList.length > 0 &&
+      content.bullBreedsList !== lastLocalBreedsRef.current
+    ) {
       setBreedsList(content.bullBreedsList as ExtendedBreedItem[]);
     }
   }, [content.bullBreedsList]);
@@ -267,6 +273,7 @@ export const AdminVisualPageEditor: React.FC = () => {
       }
       return b;
     });
+    lastLocalBreedsRef.current = updated;
     setBreedsList(updated);
     updateContent({ bullBreedsList: updated });
   };

@@ -44,7 +44,7 @@ export const HeroBloodData: React.FC<HeroBloodDataProps> = () => {
       {/* Background Image requested by user with rich dark luxury gradients */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
         <img
-          src={HERO_BG_URL}
+          src={bannerImgUrl}
           alt="INBR Background"
           referrerPolicy="no-referrer"
           className="w-full h-full object-cover opacity-25 filter brightness-75 scale-105"
