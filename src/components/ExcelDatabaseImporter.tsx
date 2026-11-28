@@ -71,7 +71,32 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
           workbook.SheetNames[0];
 
         const worksheet = workbook.Sheets[sheetName];
-        const rawJson: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+        // Auto-detect real header row (handles Excel files with banner/title rows above column headers)
+        const aoa: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
+        let headerRowIdx = 0;
+        let bestScore = -1;
+        const headerKeywords = ['registro', 'folio', 'microchip', 'chip', 'nombre', 'ejemplar', 'raza', 'padre', 'madre', 'propietario', 'color', 'sexo'];
+        for (let r = 0; r < Math.min(10, aoa.length); r++) {
+          const rowCells = (aoa[r] || []).map((c) => normalizeKey(String(c ?? '')));
+          const score = rowCells.reduce((acc, cell) => {
+            if (!cell) return acc;
+            return acc + (headerKeywords.some((kw) => cell.includes(kw)) ? 1 : 0);
+          }, 0);
+          if (score > bestScore) {
+            bestScore = score;
+            headerRowIdx = r;
+          }
+        }
+
+        const rawJsonAll: any[] = XLSX.utils.sheet_to_json(worksheet, {
+          defval: '',
+          range: headerRowIdx,
+        });
+
+        // Filter out completely blank rows so they don't become EJEMPLAR #N / INBR-EXCEL-N
+        const rawJson = rawJsonAll.filter((row) =>
+          Object.values(row).some((v) => String(v ?? '').trim() !== '')
+        );
 
         if (!rawJson || rawJson.length === 0) {
           throw new Error('El archivo Excel está vacío o no contiene filas con datos válidos.');
@@ -108,13 +133,13 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
           };
 
           const reg = findVal(
-            ['numeroregistro', 'noregistro', 'nroregistro', 'numero_registro', 'numregistro', 'folio', 'registro', 'regnumber', 'reg', 'codigo', 'inbr', 'id'],
-            ['padre', 'madre', 'sire', 'dam', 'fecha', 'tipo', 'region', 'estado', 'anterior', 'previo']
+            ['numeroregistro', 'noregistro', 'nroregistro', 'numero_registro', 'numregistro', 'nregistro', 'noreg', 'nreg', 'folioregistro', 'folioinbr', 'folio', 'certificado', 'matricula', 'registro', 'regnumber', 'reg', 'codigo', 'clave', 'pedigree', 'inbr', 'id'],
+            ['padre', 'madre', 'sire', 'dam', 'fecha', 'tipo', 'region', 'estado', 'anterior', 'previo', 'chip', 'microchip']
           ) || `INBR-EXCEL-${1000 + index}`;
           const chip = findVal(['microchip', 'chip', 'iso', 'rfid'], ['padre', 'madre']);
 
           // Distinct relational column extraction (avoid NOMBRE DEL PADRE / MADRE as dog name)
-          let name = findVal(['nombre', 'nombreejemplar', 'ejemplar', 'cachorro', 'cria'], ['padre', 'madre', 'sire', 'dam', 'propietario', 'dueno', 'criador', 'owner']);
+          let name = findVal(['nombreejemplar', 'nombreperro', 'nombre', 'ejemplar', 'cachorro', 'cria'], ['padre', 'madre', 'sire', 'dam', 'propietario', 'dueno', 'criador', 'owner']);
           const sire = findVal(['padre', 'sire', 'papa', 'idpadre'], ['madre', 'dam', 'mama', 'regpadre']) || 'INBR CHAMPION SIRE';
           const sireReg = findVal(['regpadre', 'sirereg', 'regsire']) || `REG-${sire.replace(/[^A-Za-z0-9]/g, '').toUpperCase()}`;
           const dam = findVal(['madre', 'dam', 'mama', 'idmadre'], ['padre', 'sire', 'papa', 'regmadre']) || 'INBR CHAMPION DAM';

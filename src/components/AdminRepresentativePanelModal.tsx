@@ -174,6 +174,7 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
   const { unreadCount } = useNotifications();
   const [editingDogReg, setEditingDogReg] = useState<string | null>(null);
   const [editDogDraft, setEditDogDraft] = useState<{
+    regNumber: string;
     name: string;
     microchip: string;
     breed: string;
@@ -183,6 +184,7 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
     sire: string;
     dam: string;
   }>({
+    regNumber: '',
     name: '',
     microchip: '',
     breed: '',
@@ -2349,6 +2351,7 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
                                       } else {
                                         setEditingDogReg(activeSearchDog.regNumber);
                                         setEditDogDraft({
+                                          regNumber: activeSearchDog.regNumber || '',
                                           name: activeSearchDog.name || '',
                                           microchip: activeSearchDog.microchip || '',
                                           breed: activeSearchDog.breed || 'American Bully',
@@ -2399,6 +2402,16 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
                                   Corregir Registro {activeSearchDog.regNumber} en Supabase:
                                 </h5>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                                  <div>
+                                    <label className="text-[10px] text-[#FFE885] font-bold block mb-1">N° de Registro / Folio Oficial:</label>
+                                    <input
+                                      type="text"
+                                      value={editDogDraft.regNumber}
+                                      onChange={(e) => setEditDogDraft({ ...editDogDraft, regNumber: e.target.value.toUpperCase() })}
+                                      placeholder="Ej: B10295"
+                                      className="w-full px-3 py-2 rounded-lg bg-black border border-[#D4AF37]/60 text-[#FFE885] font-mono font-bold uppercase"
+                                    />
+                                  </div>
                                   <div>
                                     <label className="text-[10px] text-neutral-400 block mb-1">Nombre del Ejemplar:</label>
                                     <input

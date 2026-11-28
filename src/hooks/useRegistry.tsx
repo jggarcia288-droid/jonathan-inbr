@@ -342,6 +342,41 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const merged = Array.from(map.values());
     setDogs(merged);
 
+    // Clean up temporary INBR-EXCEL-* ghost records when a real folio with matching microchip is uploaded
+    const realChipFolioPairs = newDogs
+      .filter(
+        (d) =>
+          d.regNumber &&
+          !d.regNumber.toUpperCase().startsWith('INBR-EXCEL-') &&
+          hasRealMicrochip(d.microchip)
+      )
+      .map((d) => ({
+        chip: d.microchip.trim(),
+        newReg: d.regNumber.replace(/\*/g, '').trim().toUpperCase(),
+      }));
+
+    if (realChipFolioPairs.length > 0) {
+      const chipsToCheck = realChipFolioPairs.map((p) => p.chip);
+      try {
+        const { data: excelDupes } = await supabase
+          .from('perros')
+          .select('numero_registro, chip')
+          .ilike('numero_registro', 'INBR-EXCEL-%')
+          .in('chip', chipsToCheck);
+
+        if (excelDupes && excelDupes.length > 0) {
+          const regsToDelete = excelDupes.map((r: any) => r.numero_registro).filter(Boolean);
+          if (regsToDelete.length > 0) {
+            await supabase.from('perros').delete().in('numero_registro', regsToDelete);
+            const deleteSet = new Set(regsToDelete.map((r: string) => normalizePedigreeAlnum(r)));
+            setDogs((prev) => prev.filter((d) => !deleteSet.has(normalizePedigreeAlnum(d.regNumber))));
+          }
+        }
+      } catch (cleanupErr) {
+        console.warn('INBR-EXCEL ghost cleanup warning:', cleanupErr);
+      }
+    }
+
     const recordsToInsert = newDogs.map((d) => ({
       numero_registro: d.regNumber.replace(/\*/g, '').trim().toUpperCase(),
       nombre: d.name.trim().toUpperCase(),
@@ -391,18 +426,13 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   ): Promise<{ success: boolean; error?: string }> => {
     const targetReg = regNumber.replace(/\*/g, '').trim().toUpperCase();
     const targetAlnum = normalizePedigreeAlnum(targetReg);
-
-    setDogs((prev) =>
-      prev.map((d) => {
-        if (normalizePedigreeAlnum(d.regNumber) === targetAlnum || d.regNumber.trim().toUpperCase() === targetReg) {
-          return { ...d, ...patch };
-        }
-        return d;
-      })
-    );
+    const nextReg = patch.regNumber
+      ? patch.regNumber.replace(/\*/g, '').trim().toUpperCase()
+      : targetReg;
 
     try {
       const dbPatch: Record<string, any> = {};
+      if (nextReg && nextReg !== targetReg) dbPatch.numero_registro = nextReg;
       if (patch.name !== undefined) dbPatch.nombre = patch.name.trim().toUpperCase();
       if (patch.breed !== undefined) dbPatch.raza = patch.breed.trim();
       if (patch.gender !== undefined) dbPatch.sexo = patch.gender === 'Hembra' ? 'HEMBRA' : 'MACHO';
@@ -422,6 +452,15 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (error) {
         return { success: false, error: error.message };
       }
+
+      setDogs((prev) =>
+        prev.map((d) => {
+          if (normalizePedigreeAlnum(d.regNumber) === targetAlnum || d.regNumber.trim().toUpperCase() === targetReg) {
+            return { ...d, ...patch, regNumber: nextReg };
+          }
+          return d;
+        })
+      );
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err?.message || 'Error al actualizar en Supabase' };
