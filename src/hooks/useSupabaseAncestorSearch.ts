@@ -150,6 +150,10 @@ export function useSupabaseAncestorSearch(
   );
 
   useEffect(() => {
+    cache.clear();
+  }, [localDogs.length]);
+
+  useEffect(() => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }

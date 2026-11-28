@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { SAMPLE_DOGS, BREEDERS_DIRECTORY, DogRecord } from '../data/registryData';
+import { BREEDERS_DIRECTORY, DogRecord } from '../data/registryData';
 import { supabase, SupabasePerro, searchDogInSupabase as libSearchDog } from '../lib/supabase';
 import { getBreedImageByIdOrName } from '../utils/breedImages';
 
@@ -15,6 +15,7 @@ export interface RegistryContextType {
   addBreedersFromExcel: (newBreeders: any[]) => { count: number };
   updateDogRecord: (regNumber: string, patch: Partial<DogRecord>) => Promise<{ success: boolean; error?: string }>;
   deleteDogRecord: (regNumber: string) => Promise<{ success: boolean; error?: string }>;
+  clearAllDogs: () => Promise<{ success: boolean; error?: string }>;
   resetToDefaults: () => void;
   findDogByQuery: (query: string) => DogRecord | undefined;
   searchDogOnlineAndOffline: (query: string) => Promise<DogRecord | undefined>;
@@ -25,7 +26,8 @@ export interface RegistryContextType {
 
 export const RegistryContext = createContext<RegistryContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_DOGS_KEY = 'inbr_custom_dogs_v2';
+const LOCAL_STORAGE_DOGS_KEY = 'inbr_registry_cache_v3';
+const LEGACY_STORAGE_DOGS_KEYS = ['inbr_custom_dogs_v2', 'inbr_custom_dogs', 'inbr_excel_dogs', 'inbr_dogs'];
 const LOCAL_STORAGE_BREEDERS_KEY = 'inbr_custom_breeders_v2';
 
 import { 
@@ -135,13 +137,15 @@ export function mapSupabaseToDogRecord(p: SupabasePerro): DogRecord {
 
   const cleanChip = hasRealMicrochip(p.chip)
     ? p.chip!.trim()
-    : `INBR-CHIP-${regTrimmed || '0000'}`;
+    : p.chip && p.chip.trim().toUpperCase() !== 'XXX'
+      ? p.chip.trim()
+      : 'SIN MICROCHIP';
 
   return {
     regNumber: regTrimmed,
     microchip: cleanChip,
     name: resolvedName,
-    breed: p.raza || 'American Bully',
+    breed: (p.raza || '').trim() || 'SIN ESPECIFICAR',
     variety: isCamada ? 'Camada Registrada' : 'Standard',
     gender: isFemale ? 'Hembra' : 'Macho',
     dob: p.fecha_nac || (isCamada ? '2024-01-01' : '2023-01-01'),
@@ -166,8 +170,8 @@ export function mapSupabaseToDogRecord(p: SupabasePerro): DogRecord {
 export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isLoadingSupabase, setIsLoadingSupabase] = useState<boolean>(true);
   const [supabaseConnected, setSupabaseConnected] = useState<boolean>(true);
-  const [supabaseTotalCount, setSupabaseTotalCount] = useState<number>(2528);
-  
+  const [supabaseTotalCount, setSupabaseTotalCount] = useState<number>(0);
+
   const [dogs, setDogs] = useState<DogRecord[]>(() => {
     const map = new Map<string, DogRecord>();
     const upsertIntoMap = (d: DogRecord) => {
@@ -177,21 +181,18 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       map.set(key, existing ? mergeDogRecords(existing, d) : d);
     };
 
-    SAMPLE_DOGS.forEach(upsertIntoMap);
-
     if (typeof window !== 'undefined') {
       try {
-        ['inbr_custom_dogs_v2', 'inbr_custom_dogs', 'inbr_excel_dogs', 'inbr_dogs'].forEach((k) => {
-          const saved = localStorage.getItem(k);
-          if (saved) {
-            try {
-              const parsed = JSON.parse(saved);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                parsed.forEach(upsertIntoMap);
-              }
-            } catch {}
-          }
+        LEGACY_STORAGE_DOGS_KEYS.forEach((legacyKey) => {
+          localStorage.removeItem(legacyKey);
         });
+        const saved = localStorage.getItem(LOCAL_STORAGE_DOGS_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            parsed.forEach(upsertIntoMap);
+          }
+        }
       } catch (e) {
         console.warn('Error reading dogs from localStorage', e);
       }
@@ -216,11 +217,12 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return BREEDERS_DIRECTORY;
   });
 
-  // Fetch all real dogs from Supabase database with deterministic pagination (all 2,528+ records)
+  // Fetch all real dogs exclusively from Supabase 'perros' table
   const refreshFromSupabase = useCallback(async () => {
     setIsLoadingSupabase(true);
     try {
       let allFetchedDogs: SupabasePerro[] = [];
+      let hadFetchError = false;
       const pageSize = 1000;
       let from = 0;
       let hasMore = true;
@@ -236,6 +238,7 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         if (error) {
           console.warn('Error fetching perros chunk from Supabase:', error);
+          hadFetchError = true;
           break;
         }
 
@@ -252,88 +255,29 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       }
 
-      // Fetch supplemental specimens + pedigree_ancestors (low-priority fallback only when not in perros)
-      let supplementalDogs: DogRecord[] = [];
-      try {
-        const [{ data: specRows }, { data: relRows }] = await Promise.all([
-          supabase.from('specimens').select('*').limit(200),
-          supabase.from('pedigree_ancestors').select('*').limit(500),
-        ]);
-        if (Array.isArray(specRows) && specRows.length > 0) {
-          const specById = new Map<string, any>();
-          specRows.forEach((s: any) => { if (s?.id) specById.set(s.id, s); });
-          const parentsBySpecId = new Map<string, { sire?: any; dam?: any }>();
-          if (Array.isArray(relRows)) {
-            relRows.forEach((rel: any) => {
-              if (Number(rel.generation_level) !== 1 || !rel.specimen_id || !rel.ancestor_id) return;
-              const anc = specById.get(rel.ancestor_id);
-              if (!anc) return;
-              const entry = parentsBySpecId.get(rel.specimen_id) || {};
-              const rType = String(rel.relationship_type || '').toLowerCase();
-              if (rType.includes('dam') || rType.includes('mother')) entry.dam = anc;
-              else entry.sire = anc;
-              parentsBySpecId.set(rel.specimen_id, entry);
-            });
-          }
-          supplementalDogs = specRows
-            .filter((s: any) => s?.registration_number && s?.name)
-            .map((s: any) => {
-              const p = parentsBySpecId.get(s.id) || {};
-              const isFem = String(s.sex || '').toUpperCase().startsWith('F') || String(s.sex || '').toUpperCase().startsWith('H');
-              return {
-                regNumber: String(s.registration_number).trim().toUpperCase(),
-                microchip: s.chip || `INBR-CHIP-${String(s.registration_number).trim()}`,
-                name: String(s.name).trim().toUpperCase(),
-                breed: s.breed || 'American Bully',
-                variety: 'Standard',
-                gender: isFem ? 'Hembra' : 'Macho',
-                dob: s.birth_date || '2022-01-01',
-                color: s.color || 'Estándar Oficial',
-                owner: 'Criadero Oficial INBR',
-                breeder: 'Criadero Registrado INBR',
-                country: 'México',
-                sire: p.sire?.name ? String(p.sire.name).trim().toUpperCase() : 'SIN REGISTRO',
-                sireReg: p.sire?.registration_number ? String(p.sire.registration_number).trim().toUpperCase() : '—',
-                dam: p.dam?.name ? String(p.dam.name).trim().toUpperCase() : 'SIN REGISTRO',
-                damReg: p.dam?.registration_number ? String(p.dam.registration_number).trim().toUpperCase() : '—',
-                points: Number(s.points) || 0,
-                titles: s.championship_status ? [String(s.championship_status)] : [],
-                imageUrl: getBreedImageByIdOrName(s.breed || ''),
-                status: 'ACTIVE_VALIDATED',
-              } as DogRecord;
-            });
-        }
-      } catch {
-        // Supplemental tables are optional
-      }
-
-      if (allFetchedDogs.length > 0 || supplementalDogs.length > 0) {
+      if (!hadFetchError) {
         const mappedRecords = allFetchedDogs.map(mapSupabaseToDogRecord);
+        const map = new Map<string, DogRecord>();
+        const upsertIntoMap = (d: DogRecord) => {
+          if (!d || !d.regNumber) return;
+          const key = normalizePedigreeAlnum(d.regNumber) || d.regNumber.toUpperCase().trim();
+          const existing = map.get(key);
+          map.set(key, existing ? mergeDogRecords(existing, d) : d);
+        };
 
-        setDogs(() => {
-          const map = new Map<string, DogRecord>();
-          const upsertIntoMap = (d: DogRecord) => {
-            if (!d || !d.regNumber) return;
-            const key = normalizePedigreeAlnum(d.regNumber) || d.regNumber.toUpperCase().trim();
-            const existing = map.get(key);
-            map.set(key, existing ? mergeDogRecords(existing, d) : d);
-          };
+        mappedRecords.forEach(upsertIntoMap);
+        const merged = Array.from(map.values());
 
-          SAMPLE_DOGS.forEach(upsertIntoMap);
-          supplementalDogs.forEach((d) => {
-            const key = normalizePedigreeAlnum(d.regNumber) || d.regNumber.toUpperCase().trim();
-            if (!map.has(key)) map.set(key, d);
-          });
-          mappedRecords.forEach(upsertIntoMap);
-
-          const merged = Array.from(map.values());
-          if (typeof window !== 'undefined') {
-            try {
+        setDogs(merged);
+        if (typeof window !== 'undefined') {
+          try {
+            if (merged.length > 0) {
               localStorage.setItem(LOCAL_STORAGE_DOGS_KEY, JSON.stringify(merged));
-            } catch {}
-          }
-          return merged;
-        });
+            } else {
+              localStorage.removeItem(LOCAL_STORAGE_DOGS_KEY);
+            }
+          } catch {}
+        }
         setSupabaseConnected(true);
         setSupabaseTotalCount(allFetchedDogs.length);
       }
@@ -353,6 +297,18 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         'postgres_changes',
         { event: '*', schema: 'public', table: 'perros' },
         (payload) => {
+          if (payload.eventType === 'DELETE') {
+            const oldReg = (payload.old as any)?.numero_registro;
+            if (oldReg) {
+              const oldAlnum = normalizePedigreeAlnum(oldReg);
+              setDogs((prevDogs) =>
+                prevDogs.filter((d) => normalizePedigreeAlnum(d.regNumber) !== oldAlnum)
+              );
+            } else {
+              refreshFromSupabase();
+            }
+            return;
+          }
           if (payload.new) {
             const mapped = mapSupabaseToDogRecord(payload.new as SupabasePerro);
             setDogs((prevDogs) => {
@@ -376,11 +332,15 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
   }, [refreshFromSupabase]);
 
-  // Persist local changes
+  // Persist local cache or clear when empty
   useEffect(() => {
-    if (typeof window !== 'undefined' && dogs.length > 0) {
+    if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem(LOCAL_STORAGE_DOGS_KEY, JSON.stringify(dogs));
+        if (dogs.length > 0) {
+          localStorage.setItem(LOCAL_STORAGE_DOGS_KEY, JSON.stringify(dogs));
+        } else {
+          localStorage.removeItem(LOCAL_STORAGE_DOGS_KEY);
+        }
       } catch (e) {}
     }
   }, [dogs]);
@@ -473,7 +433,7 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       }
       setSupabaseConnected(true);
-      setSupabaseTotalCount((prev) => prev + supabaseSaved);
+      await refreshFromSupabase();
     } catch (err) {
       console.warn('Network error saving to Supabase:', err);
     }
@@ -558,11 +518,35 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  const clearAllDogs = async (): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { error } = await supabase
+        .from('perros')
+        .delete()
+        .not('numero_registro', 'is', null);
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      setDogs([]);
+      setSupabaseTotalCount(0);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(LOCAL_STORAGE_DOGS_KEY);
+        LEGACY_STORAGE_DOGS_KEYS.forEach((k) => localStorage.removeItem(k));
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Error al vaciar base de datos' };
+    }
+  };
+
   const resetToDefaults = () => {
-    setDogs(SAMPLE_DOGS);
+    setDogs([]);
     setBreeders(BREEDERS_DIRECTORY);
     if (typeof window !== 'undefined') {
       localStorage.removeItem(LOCAL_STORAGE_DOGS_KEY);
+      LEGACY_STORAGE_DOGS_KEYS.forEach((k) => localStorage.removeItem(k));
       localStorage.removeItem(LOCAL_STORAGE_BREEDERS_KEY);
     }
     refreshFromSupabase();
@@ -822,6 +806,7 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         addBreedersFromExcel,
         updateDogRecord,
         deleteDogRecord,
+        clearAllDogs,
         resetToDefaults,
         findDogByQuery,
         searchDogOnlineAndOffline,

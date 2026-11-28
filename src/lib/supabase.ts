@@ -277,30 +277,6 @@ export async function searchDogInSupabase(query: string): Promise<SupabasePerro 
       /^(INBR|REG|CHIP|ISO|CA|F1)/i.test(withoutStars);
 
     if (looksLikeCodeOrChip) {
-      const specTerm = quoteFilterVal(strippedInbr || withoutStars);
-      const { data: specExact } = await supabase
-        .from('specimens')
-        .select('*')
-        .or(`registration_number.ilike.${specTerm},chip.ilike.${specTerm}`)
-        .limit(2);
-
-      if (specExact && specExact.length > 0) {
-        const s = specExact[0];
-        return {
-          numero_registro: s.registration_number || s.id,
-          nombre: s.name,
-          raza: s.breed || 'American Bully',
-          sexo: s.sex || 'MACHO',
-          color: s.color || null,
-          fecha_nac: s.birth_date || null,
-          chip: s.chip || null,
-          id_padre: null,
-          id_madre: null,
-          propietario_nombre: 'Propietario Oficial INBR',
-          estado: 'APROBADO',
-          tipo_registro: 'SPECIMEN',
-        };
-      }
       return null;
     }
 

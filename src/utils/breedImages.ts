@@ -58,7 +58,10 @@ export function getBreedImageByIdOrName(idOrName: string): string {
   if (s.includes('exotic')) {
     return BREED_IMAGES.exoticBull;
   }
-  return BREED_IMAGES.americanBully;
+  if (s.includes('bully')) {
+    return BREED_IMAGES.americanBully;
+  }
+  return '/logo-inbr.jpg';
 }
 
 export function isLegacyStockUrl(url?: string): boolean {

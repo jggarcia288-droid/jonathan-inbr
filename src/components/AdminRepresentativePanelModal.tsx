@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useDeferredValue } from 'react';
-import { SAMPLE_DOGS, DogRecord, UPCOMING_EVENTS, BREEDERS_DIRECTORY } from '../data/registryData';
+import { DogRecord, UPCOMING_EVENTS, BREEDERS_DIRECTORY } from '../data/registryData';
 import { useAuth } from '../hooks/useAuth';
 import { useRegistry } from '../context/RegistryContext';
 import { 
@@ -315,7 +315,7 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
   // =========================================================================
   const [searchQuery, setSearchQuery] = useState('');
   const [breedFilter, setBreedFilter] = useState('ALL');
-  const [selectedDog, setSelectedDog] = useState<DogRecord>(SAMPLE_DOGS[0]);
+  const [selectedDog, setSelectedDog] = useState<DogRecord | null>(dogs[0] || null);
   const [searchSelectedDogIndex, setSearchSelectedDogIndex] = useState(0);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
 
@@ -326,12 +326,16 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
     setSearchSelectedDogIndex(0);
   }, [deferredSearchQuery, breedFilter]);
 
-  // Sync default selected dog once dogs load
+  // Sync selected dog once dogs load or when database is emptied
   useEffect(() => {
-    if (dogs.length > 0 && selectedDog.regNumber === SAMPLE_DOGS[0].regNumber) {
+    if (dogs.length === 0) {
+      if (selectedDog !== null) setSelectedDog(null);
+      return;
+    }
+    if (!selectedDog || !dogs.some((d) => d.regNumber === selectedDog.regNumber)) {
       setSelectedDog(dogs[0]);
     }
-  }, [dogs, selectedDog.regNumber]);
+  }, [dogs, selectedDog]);
 
   // Filtered Dogs calculation with smart prefix and microchip handling (memoized & deferred)
   const filteredDogs = useMemo(() => {
@@ -386,7 +390,10 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
   const [generatorStatusText, setGeneratorStatusText] = useState('');
 
   // 4-generation pedigree tree for the selected dog
-  const pedigree = buildEightGenPedigree(selectedDog, dogs);
+  const pedigree = useMemo(
+    () => (selectedDog ? buildEightGenPedigree(selectedDog, dogs) : null),
+    [selectedDog, dogs]
+  );
 
   // Helper to copy text to clipboard
   const handleCopyText = (text: string, label: string) => {
@@ -428,7 +435,7 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
       });
 
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const cleanReg = selectedDog.regNumber.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const cleanReg = activeSelectedDog.regNumber.replace(/[^a-zA-Z0-9_-]/g, '_');
       const filename = `INBR_Doc_${cleanReg}_${generatorSide.toUpperCase()}.jpg`;
 
       const link = document.createElement('a');
@@ -2164,24 +2171,26 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
                 </div>
 
                 {/* Quick Search Tag Suggestions */}
-                <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-400">
-                  <span className="text-[11px] font-mono text-[#D4AF37]">Pruebas rápidas:</span>
-                  {['TAHONA', 'INBR-777-TAHONA', 'INBR-84920', 'INBR-00192', 'American Bully'].map((tag) => (
-                    <button
-                      key={tag}
-                      onClick={() => setSearchQuery(tag)}
-                      className="px-2.5 py-1 rounded-lg bg-black border border-neutral-800 text-[#FFE885] font-mono text-[11px] hover:border-[#D4AF37] transition-all"
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                  {copyFeedback && (
-                    <span className="text-emerald-400 text-xs font-mono ml-auto animate-fadeIn flex items-center gap-1">
-                      <Check className="w-3.5 h-3.5" />
-                      {copyFeedback}
-                    </span>
-                  )}
-                </div>
+                {dogs.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-400">
+                    <span className="text-[11px] font-mono text-[#D4AF37]">Acceso rápido:</span>
+                    {dogs.slice(0, 4).map((d) => (
+                      <button
+                        key={d.regNumber}
+                        onClick={() => setSearchQuery(d.regNumber)}
+                        className="px-2.5 py-1 rounded-lg bg-black border border-neutral-800 text-[#FFE885] font-mono text-[11px] hover:border-[#D4AF37] transition-all"
+                      >
+                        {d.regNumber} • {d.name}
+                      </button>
+                    ))}
+                    {copyFeedback && (
+                      <span className="text-emerald-400 text-xs font-mono ml-auto animate-fadeIn flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" />
+                        {copyFeedback}
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 {/* Single Large Specimen View (Solo uno, más grande y con datos completos) */}
                 {filteredDogs.length > 0 && (() => {
@@ -2354,7 +2363,7 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
                                           regNumber: activeSearchDog.regNumber || '',
                                           name: activeSearchDog.name || '',
                                           microchip: activeSearchDog.microchip || '',
-                                          breed: activeSearchDog.breed || 'American Bully',
+                                          breed: activeSearchDog.breed || '',
                                           gender: activeSearchDog.gender === 'Hembra' ? 'Hembra' : 'Macho',
                                           color: activeSearchDog.color || '',
                                           owner: activeSearchDog.owner || '',
@@ -2753,7 +2762,31 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
             {/* ========================================================================= */}
             {/* TAB 2: GENERADOR DE DOCUMENTOS EN PDF Y JPG (DISEÑO OFICIAL 4 GEN)        */}
             {/* ========================================================================= */}
-            {activeTab === 'generator' && (
+            {activeTab === 'generator' && (!selectedDog || !pedigree) && (
+              <div className="p-6 sm:p-10 animate-fadeIn">
+                <div className="p-10 rounded-2xl bg-[#090909] border border-neutral-800 text-center space-y-3">
+                  <Database className="w-10 h-10 text-[#D4AF37] mx-auto opacity-80" />
+                  <h4 className="text-lg font-bold text-white font-serif-luxury">
+                    Base de datos vacía — Sin ejemplares cargados
+                  </h4>
+                  <p className="text-xs text-neutral-400 max-w-md mx-auto">
+                    Importa tus archivos Excel o registra ejemplares para generar certificados oficiales, credenciales PVC y genogramas de 4 generaciones.
+                  </p>
+                  {onOpenExcelImporter && (
+                    <button
+                      type="button"
+                      onClick={onOpenExcelImporter}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gold-gradient text-black font-bold text-xs hover:brightness-110"
+                    >
+                      <FileSpreadsheet className="w-4 h-4" />
+                      <span>Importar Base Excel</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'generator' && selectedDog && pedigree && (
               <div className="p-4 sm:p-8 space-y-6 animate-fadeIn">
                 {/* Header & Canine Selector */}
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-[#1C180E] to-[#0F0D07] border-2 border-[#D4AF37] shadow-xl">

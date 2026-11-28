@@ -30,7 +30,7 @@ import { LiveCmsInlineEditor } from './components/LiveCmsInlineEditor';
 import { NotificationCenterModal } from './components/NotificationCenterModal';
 import { NotificationToast } from './components/NotificationToast';
 import { AiSupportChatFloatingWidget } from './components/AiSupportChatFloatingWidget';
-import { DogRecord, SAMPLE_DOGS } from './data/registryData';
+import { DogRecord } from './data/registryData';
 import { useDynamicContent } from './utils/dynamicContent';
 import { FileSpreadsheet, Lock, ArrowUp, ArrowLeft } from 'lucide-react';
 

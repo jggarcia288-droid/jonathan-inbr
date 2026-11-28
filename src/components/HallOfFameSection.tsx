@@ -1,19 +1,66 @@
 import React from 'react';
 import { useTranslation } from '../context/LanguageContext';
 import { useDynamicContent } from '../utils/dynamicContent';
-import { SAMPLE_DOGS, DogRecord } from '../data/registryData';
+import { useRegistry } from '../context/RegistryContext';
+import { BREED_IMAGES } from '../utils/breedImages';
+import { DogRecord } from '../data/registryData';
 import { Crown, Trophy, Sparkles, Award, Star, Flame, ChevronRight } from 'lucide-react';
 
 interface HallOfFameSectionProps {
   onSelectDog: (dog: DogRecord) => void;
 }
 
+const HALL_OF_FAME_VULCAN_FALLBACK: DogRecord = {
+  regNumber: 'INBR-84920',
+  microchip: 'SIN MICROCHIP',
+  name: 'KING VULCAN',
+  breed: 'American Bully',
+  variety: 'Pocket',
+  gender: 'Macho',
+  dob: '2022-04-15',
+  color: 'Lilac Tri-Color',
+  owner: 'Jonathan Garcia / Imperial Bullyz',
+  breeder: 'Imperial Bullyz International',
+  country: 'USA / México',
+  sire: 'GR CH BAPE THE LEGEND',
+  sireReg: 'INBR-33201',
+  dam: 'QUEEN BELLA',
+  damReg: 'INBR-00192',
+  points: 380,
+  titles: ['SUPREME CH', 'GR CH', 'BEST IN MULTI-SHOW'],
+  imageUrl: BREED_IMAGES.americanBully,
+  status: 'ACTIVE_VALIDATED',
+};
+
+const HALL_OF_FAME_BELLA_FALLBACK: DogRecord = {
+  regNumber: 'INBR-00192',
+  microchip: 'SIN MICROCHIP',
+  name: 'QUEEN BELLA',
+  breed: 'Exotic Bull',
+  variety: 'Exotic Standard',
+  gender: 'Hembra',
+  dob: '2021-08-20',
+  color: 'Chocolate Tri Ghost',
+  owner: 'Mariana Palma',
+  breeder: 'Palma Dynasties',
+  country: 'México',
+  sire: 'THOR THE HAMMER',
+  sireReg: 'INBR-10088',
+  dam: 'LADY ELECTRA',
+  damReg: 'INBR-10091',
+  points: 295,
+  titles: ['SUPREME CH', 'WORLD WINNER'],
+  imageUrl: BREED_IMAGES.exoticBull,
+  status: 'ACTIVE_VALIDATED',
+};
+
 export const HallOfFameSection: React.FC<HallOfFameSectionProps> = ({ onSelectDog }) => {
   const { t } = useTranslation();
   const { content } = useDynamicContent();
+  const { dogs } = useRegistry();
 
-  const vulcan = SAMPLE_DOGS.find((d) => d.name === 'KING VULCAN') || SAMPLE_DOGS[0];
-  const bella = SAMPLE_DOGS.find((d) => d.name === 'QUEEN BELLA') || SAMPLE_DOGS[1];
+  const vulcan = dogs.find((d) => d.name.toUpperCase() === 'KING VULCAN') || HALL_OF_FAME_VULCAN_FALLBACK;
+  const bella = dogs.find((d) => d.name.toUpperCase() === 'QUEEN BELLA') || HALL_OF_FAME_BELLA_FALLBACK;
 
   return (
     <section id="salon-fama" className="py-20 bg-[#0E0E0E] relative border-t border-b border-[#C9A86A]/20">

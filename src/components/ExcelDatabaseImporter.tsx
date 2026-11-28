@@ -12,10 +12,8 @@ import {
   Download, 
   Database, 
   X, 
-  RefreshCw, 
+  Trash2,
   Table, 
-  Sparkles,
-  Layers,
   HelpCircle
 } from 'lucide-react';
 
@@ -25,16 +23,33 @@ interface ExcelDatabaseImporterProps {
   onSuccessNavigate?: () => void;
 }
 
+interface DetectedColumnsSummary {
+  reg?: string;
+  chip?: string;
+  name?: string;
+  breed?: string;
+  gender?: string;
+  color?: string;
+  sire?: string;
+  dam?: string;
+  owner?: string;
+}
+
 export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
   isOpen,
   onClose,
-  onSuccessNavigate,
 }) => {
-  const { addDogsFromExcel, dogs, totalCustomRecords, resetToDefaults } = useRegistry();
+  const { addDogsFromExcel, dogs, totalCustomRecords, clearAllDogs } = useRegistry();
   
   const [fileName, setFileName] = useState<string | null>(null);
+  const [workbookState, setWorkbookState] = useState<XLSX.WorkBook | null>(null);
+  const [sheetNames, setSheetNames] = useState<string[]>([]);
+  const [selectedSheet, setSelectedSheet] = useState<string>('__ALL__');
   const [parsedDogs, setParsedDogs] = useState<DogRecord[]>([]);
   const [duplicateRegs, setDuplicateRegs] = useState<string[]>([]);
+  const [duplicateChips, setDuplicateChips] = useState<string[]>([]);
+  const [detectedCols, setDetectedCols] = useState<DetectedColumnsSummary | null>(null);
+  const [missingBreedCount, setMissingBreedCount] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [importSuccess, setImportSuccess] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -43,13 +58,249 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
 
   if (!isOpen) return null;
 
-  // Intelligent column header normalizer
   const normalizeKey = (key: string): string => {
     return key
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-z0-9]/g, '');
+  };
+
+  const cellToCleanText = (val: unknown): string => {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'number') {
+      if (!Number.isFinite(val)) return '';
+      if (Number.isInteger(val)) return val.toFixed(0);
+      return String(val).trim();
+    }
+    if (val instanceof Date && !Number.isNaN(val.getTime())) {
+      return val.toISOString().split('T')[0];
+    }
+    return String(val).replace(/\s+/g, ' ').trim();
+  };
+
+  const parseSheetRows = (
+    worksheet: XLSX.WorkSheet,
+    batchStamp: string,
+    sheetOffset: number
+  ): { rows: DogRecord[]; cols: DetectedColumnsSummary } => {
+    const aoa: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
+    if (!aoa || aoa.length === 0) {
+      return { rows: [], cols: {} };
+    }
+
+    let headerRowIdx = 0;
+    let bestScore = -1;
+    const headerKeywords = [
+      'registro', 'folio', 'microchip', 'chip', 'nombre', 'ejemplar',
+      'raza', 'breed', 'padre', 'madre', 'propietario', 'color', 'sexo'
+    ];
+    for (let r = 0; r < Math.min(12, aoa.length); r++) {
+      const rowCells = (aoa[r] || []).map((c) => normalizeKey(cellToCleanText(c)));
+      const score = rowCells.reduce((acc, cell) => {
+        if (!cell) return acc;
+        return acc + (headerKeywords.some((kw) => cell.includes(kw)) ? 1 : 0);
+      }, 0);
+      if (score > bestScore) {
+        bestScore = score;
+        headerRowIdx = r;
+      }
+    }
+
+    if (bestScore < 1) {
+      return { rows: [], cols: {} };
+    }
+
+    const rawJsonAll: any[] = XLSX.utils.sheet_to_json(worksheet, {
+      defval: '',
+      range: headerRowIdx,
+    });
+
+    const rawJson = rawJsonAll.filter((row) =>
+      Object.values(row).some((v) => cellToCleanText(v) !== '')
+    );
+
+    if (!rawJson || rawJson.length === 0) {
+      return { rows: [], cols: {} };
+    }
+
+    const headerKeys = Object.keys(rawJson[0] || {});
+    const matchHeader = (patterns: string[], exclude: string[] = []): string | undefined => {
+      for (const p of patterns) {
+        for (const k of headerKeys) {
+          const norm = normalizeKey(k);
+          if (exclude.some((ex) => norm.includes(ex))) continue;
+          if (norm === p) return k;
+        }
+      }
+      for (const p of patterns) {
+        for (const k of headerKeys) {
+          const norm = normalizeKey(k);
+          if (exclude.some((ex) => norm.includes(ex))) continue;
+          if (norm.includes(p)) return k;
+        }
+      }
+      return undefined;
+    };
+
+    const regCol = matchHeader(
+      ['numeroregistro', 'noregistro', 'nroregistro', 'numero_registro', 'numregistro', 'nregistro', 'noreg', 'nreg', 'folioregistro', 'folioinbr', 'folio', 'certificado', 'matricula', 'registro', 'regnumber', 'reg', 'codigo', 'clave', 'pedigree', 'inbr', 'id'],
+      ['padre', 'madre', 'sire', 'dam', 'fecha', 'tipo', 'region', 'estado', 'anterior', 'previo', 'chip', 'microchip']
+    );
+    const chipCol = matchHeader(['microchip', 'chip', 'iso', 'rfid', 'nochip', 'numerodechip', 'numchip'], ['padre', 'madre', 'sire', 'dam']);
+    const nameCol = matchHeader(['nombreejemplar', 'nombredelperro', 'nombreperro', 'nombre', 'ejemplar', 'cachorro', 'cria', 'dogname'], ['padre', 'madre', 'sire', 'dam', 'propietario', 'dueno', 'criador', 'owner']);
+    const breedCol = matchHeader(['raza', 'razacanina', 'razadelperro', 'razadelejemplar', 'breed', 'dogbreed', 'especie', 'razayvariedad', 'subraza', 'razapureza'], ['padre', 'madre', 'sire', 'dam']);
+    const varietyCol = matchHeader(['variedad', 'subvariedad', 'variety', 'clase', 'tamano'], ['registro', 'raza']);
+    const genderCol = matchHeader(['sexo', 'gender', 'sex']);
+    const colorCol = matchHeader(['color', 'manto', 'marcas', 'capa']);
+    const dobCol = matchHeader(['fechanac', 'fechadenacimiento', 'nacimiento', 'dob', 'fecha'], ['registro']);
+    const sireCol = matchHeader(['padre', 'sire', 'papa', 'idpadre', 'nombredelpadre', 'nombrepadre'], ['madre', 'dam', 'mama', 'regpadre', 'sirereg']);
+    const sireRegCol = matchHeader(['regpadre', 'sirereg', 'regsire', 'foliopadre']);
+    const damCol = matchHeader(['madre', 'dam', 'mama', 'idmadre', 'nombredelamadre', 'nombremadre'], ['padre', 'sire', 'papa', 'regmadre', 'damreg']);
+    const damRegCol = matchHeader(['regmadre', 'damreg', 'regdam', 'foliomadre']);
+    const ownerCol = matchHeader(['propietario', 'propietarionombre', 'nombrepropietario', 'dueno', 'owner', 'titular'], ['padre', 'madre', 'sire', 'dam']);
+    const breederCol = matchHeader(['criador', 'breeder', 'criadero', 'kennel'], ['padre', 'madre', 'sire', 'dam']);
+    const countryCol = matchHeader(['pais', 'country', 'nacion', 'origen']);
+    const pointsCol = matchHeader(['puntos', 'points', 'pts']);
+    const titlesCol = matchHeader(['titulos', 'titles', 'campeonato']);
+
+    const colsSummary: DetectedColumnsSummary = {
+      reg: regCol,
+      chip: chipCol,
+      name: nameCol,
+      breed: breedCol,
+      gender: genderCol,
+      color: colorCol,
+      sire: sireCol,
+      dam: damCol,
+      owner: ownerCol,
+    };
+
+    const rows: DogRecord[] = [];
+    rawJson.forEach((row, index) => {
+      const regRaw = regCol ? cellToCleanText(row[regCol]) : '';
+      const chip = chipCol ? cellToCleanText(row[chipCol]) : '';
+      let name = nameCol ? cellToCleanText(row[nameCol]) : '';
+
+      // Skip rows that have no folio, no chip, and no dog name
+      if (!regRaw && !chip && !name) {
+        return;
+      }
+
+      const chipDigits = chip.replace(/\D/g, '');
+      const reg = regRaw || (chipDigits.length >= 6 ? `SIN-FOLIO-${chipDigits}` : `INBR-TMP-${batchStamp}-${sheetOffset + index + 1}`);
+
+      const sire = (sireCol ? cellToCleanText(row[sireCol]) : '') || 'SIN REGISTRO';
+      const sireReg = (sireRegCol ? cellToCleanText(row[sireRegCol]) : '') || '—';
+      const dam = (damCol ? cellToCleanText(row[damCol]) : '') || 'SIN REGISTRO';
+      const damReg = (damRegCol ? cellToCleanText(row[damRegCol]) : '') || '—';
+      let owner = (ownerCol ? cellToCleanText(row[ownerCol]) : '') || 'Criadero Oficial INBR';
+
+      const isCamada = /^CA\d/i.test(reg);
+      if (isCamada && (!name || name.toUpperCase() === sire.toUpperCase() || name.toUpperCase() === dam.toUpperCase())) {
+        name = `CACHORRO ${reg.toUpperCase()}`;
+      } else if (!name) {
+        name = regRaw ? `EJEMPLAR ${regRaw.toUpperCase()}` : `EJEMPLAR #${sheetOffset + index + 1}`;
+      }
+
+      if (
+        (sire !== 'SIN REGISTRO' && owner.toUpperCase() === sire.toUpperCase()) ||
+        (dam !== 'SIN REGISTRO' && owner.toUpperCase() === dam.toUpperCase())
+      ) {
+        owner = 'Criadero Oficial INBR';
+      }
+
+      const breed = (breedCol ? cellToCleanText(row[breedCol]) : '') || 'SIN ESPECIFICAR';
+      const variety = (varietyCol ? cellToCleanText(row[varietyCol]) : '') || (isCamada ? 'Camada Registrada' : 'Standard');
+      const genderRaw = (genderCol ? cellToCleanText(row[genderCol]) : '').toLowerCase();
+      const gender: 'Macho' | 'Hembra' =
+        genderRaw.startsWith('h') || genderRaw.startsWith('f') ? 'Hembra' : 'Macho';
+      const color = (colorCol ? cellToCleanText(row[colorCol]) : '') || 'SIN ESPECIFICAR';
+      const dob = (dobCol ? cellToCleanText(row[dobCol]) : '') || new Date().toISOString().split('T')[0];
+      const breeder = (breederCol ? cellToCleanText(row[breederCol]) : '') || owner;
+      const country = (countryCol ? cellToCleanText(row[countryCol]) : '') || 'México';
+      const pointsRaw = pointsCol ? cellToCleanText(row[pointsCol]) : '';
+      const points = parseInt(pointsRaw, 10) || 0;
+      const titlesRaw = titlesCol ? cellToCleanText(row[titlesCol]) : '';
+      const titles = titlesRaw ? titlesRaw.split(/[,;/]/).map((t) => t.trim()).filter(Boolean) : [];
+
+      rows.push({
+        regNumber: reg.replace(/\*/g, '').trim().toUpperCase(),
+        microchip: chip,
+        name: name.toUpperCase(),
+        breed,
+        variety,
+        gender,
+        color,
+        dob,
+        owner,
+        breeder,
+        country,
+        sire,
+        sireReg,
+        dam,
+        damReg,
+        points,
+        titles,
+        imageUrl: getBreedImageByIdOrName(breed),
+        status: 'ACTIVE_VALIDATED',
+      });
+    });
+
+    return { rows, cols: colsSummary };
+  };
+
+  const extractFromWorkbook = (workbook: XLSX.WorkBook, sheetChoice: string) => {
+    const batchStamp = Date.now().toString(36).toUpperCase().slice(-5);
+    const targets =
+      sheetChoice === '__ALL__'
+        ? workbook.SheetNames
+        : [sheetChoice].filter((s) => workbook.Sheets[s]);
+
+    let allDogs: DogRecord[] = [];
+    let firstCols: DetectedColumnsSummary | null = null;
+
+    targets.forEach((sheetName) => {
+      const ws = workbook.Sheets[sheetName];
+      if (!ws) return;
+      const { rows, cols } = parseSheetRows(ws, batchStamp, allDogs.length);
+      if (rows.length > 0) {
+        if (!firstCols) firstCols = cols;
+        allDogs = allDogs.concat(rows);
+      }
+    });
+
+    if (allDogs.length === 0) {
+      throw new Error('No se encontraron columnas o filas válidas en el archivo Excel (ej. Registro, Nombre, Microchip, Raza).');
+    }
+
+    const seenReg = new Set<string>();
+    const dupRegs = new Set<string>();
+    const seenChip = new Set<string>();
+    const dupChips = new Set<string>();
+    let missingBreed = 0;
+
+    allDogs.forEach((d) => {
+      const regKey = d.regNumber.trim().toUpperCase();
+      if (seenReg.has(regKey)) dupRegs.add(regKey);
+      else seenReg.add(regKey);
+
+      const chipDigits = (d.microchip || '').replace(/\D/g, '');
+      if (chipDigits.length >= 8) {
+        if (seenChip.has(chipDigits)) dupChips.add(chipDigits);
+        else seenChip.add(chipDigits);
+      }
+
+      if (!d.breed || d.breed === 'SIN ESPECIFICAR') {
+        missingBreed++;
+      }
+    });
+
+    setDetectedCols(firstCols);
+    setDuplicateRegs(Array.from(dupRegs));
+    setDuplicateChips(Array.from(dupChips));
+    setMissingBreedCount(missingBreed);
+    setParsedDogs(allDogs);
   };
 
   const parseExcelFile = (file: File) => {
@@ -65,149 +316,16 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
 
-        // Take the first sheet or the sheet named 'EJEMPLARES' / 'REGISTROS'
-        const sheetName = 
-          workbook.SheetNames.find(n => /ejemplar|registro|perro|dog|inbr/i.test(n)) || 
-          workbook.SheetNames[0];
+        setWorkbookState(workbook);
+        setSheetNames(workbook.SheetNames);
+        const initialChoice = workbook.SheetNames.length > 1 ? '__ALL__' : workbook.SheetNames[0];
+        setSelectedSheet(initialChoice);
 
-        const worksheet = workbook.Sheets[sheetName];
-        // Auto-detect real header row (handles Excel files with banner/title rows above column headers)
-        const aoa: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
-        let headerRowIdx = 0;
-        let bestScore = -1;
-        const headerKeywords = ['registro', 'folio', 'microchip', 'chip', 'nombre', 'ejemplar', 'raza', 'padre', 'madre', 'propietario', 'color', 'sexo'];
-        for (let r = 0; r < Math.min(10, aoa.length); r++) {
-          const rowCells = (aoa[r] || []).map((c) => normalizeKey(String(c ?? '')));
-          const score = rowCells.reduce((acc, cell) => {
-            if (!cell) return acc;
-            return acc + (headerKeywords.some((kw) => cell.includes(kw)) ? 1 : 0);
-          }, 0);
-          if (score > bestScore) {
-            bestScore = score;
-            headerRowIdx = r;
-          }
-        }
-
-        const rawJsonAll: any[] = XLSX.utils.sheet_to_json(worksheet, {
-          defval: '',
-          range: headerRowIdx,
-        });
-
-        // Filter out completely blank rows so they don't become EJEMPLAR #N / INBR-EXCEL-N
-        const rawJson = rawJsonAll.filter((row) =>
-          Object.values(row).some((v) => String(v ?? '').trim() !== '')
-        );
-
-        if (!rawJson || rawJson.length === 0) {
-          throw new Error('El archivo Excel está vacío o no contiene filas con datos válidos.');
-        }
-
-        // Map columns intelligently (exact key matches first, then partial matches)
-        const normalizedDogs: DogRecord[] = rawJson.map((row, index) => {
-          const keys = Object.keys(row);
-
-          const findVal = (patterns: string[], exclude: string[] = []): string => {
-            // 1. Exact normalized header match first
-            for (const p of patterns) {
-              for (const k of keys) {
-                const norm = normalizeKey(k);
-                if (exclude.some(ex => norm.includes(ex))) continue;
-                if (norm === p) {
-                  const val = String(row[k] ?? '').trim();
-                  if (val) return val;
-                }
-              }
-            }
-            // 2. Partial header match in pattern priority order
-            for (const p of patterns) {
-              for (const k of keys) {
-                const norm = normalizeKey(k);
-                if (exclude.some(ex => norm.includes(ex))) continue;
-                if (norm.includes(p)) {
-                  const val = String(row[k] ?? '').trim();
-                  if (val) return val;
-                }
-              }
-            }
-            return '';
-          };
-
-          const reg = findVal(
-            ['numeroregistro', 'noregistro', 'nroregistro', 'numero_registro', 'numregistro', 'nregistro', 'noreg', 'nreg', 'folioregistro', 'folioinbr', 'folio', 'certificado', 'matricula', 'registro', 'regnumber', 'reg', 'codigo', 'clave', 'pedigree', 'inbr', 'id'],
-            ['padre', 'madre', 'sire', 'dam', 'fecha', 'tipo', 'region', 'estado', 'anterior', 'previo', 'chip', 'microchip']
-          ) || `INBR-EXCEL-${1000 + index}`;
-          const chip = findVal(['microchip', 'chip', 'iso', 'rfid'], ['padre', 'madre']);
-
-          // Distinct relational column extraction (avoid NOMBRE DEL PADRE / MADRE as dog name)
-          let name = findVal(['nombreejemplar', 'nombreperro', 'nombre', 'ejemplar', 'cachorro', 'cria'], ['padre', 'madre', 'sire', 'dam', 'propietario', 'dueno', 'criador', 'owner']);
-          const sire = findVal(['padre', 'sire', 'papa', 'idpadre'], ['madre', 'dam', 'mama', 'regpadre']) || 'INBR CHAMPION SIRE';
-          const sireReg = findVal(['regpadre', 'sirereg', 'regsire']) || '—';
-          const dam = findVal(['madre', 'dam', 'mama', 'idmadre'], ['padre', 'sire', 'papa', 'regmadre']) || 'INBR CHAMPION DAM';
-          const damReg = findVal(['regmadre', 'damreg', 'regdam']) || '—';
-          let owner = findVal(['propietario', 'propietarionombre', 'dueno', 'owner', 'titular'], ['padre', 'madre', 'sire', 'dam']) || 'Criador Afiliado INBR';
-
-          const isCamada = reg.toUpperCase().startsWith('CA');
-
-          // If it is a Camada and puppy name was empty or mistakenly set to sire name:
-          if (isCamada && (!name || name.toUpperCase() === sire.toUpperCase() || name.toUpperCase() === dam.toUpperCase())) {
-            name = `CACHORRO ${reg.toUpperCase()}`;
-          } else if (!name) {
-            name = `Ejemplar #${index + 1}`;
-          }
-
-          // Owner must never be the sire or dam dog
-          if (owner.toUpperCase() === sire.toUpperCase() || owner.toUpperCase() === dam.toUpperCase()) {
-            owner = 'Criadero Oficial INBR';
-          }
-
-          const breed = findVal(['raza', 'breed']) || 'American Bully';
-          const variety = findVal(['variedad', 'tipo', 'variety', 'clase'], ['registro']) || (isCamada ? 'Camada Registrada' : 'Standard');
-          const genderRaw = findVal(['sexo', 'gender', 'sex']).toLowerCase();
-          const gender = genderRaw.startsWith('h') || genderRaw.startsWith('f') ? 'Hembra' : 'Macho';
-          const color = findVal(['color', 'manto', 'marcas']) || 'Sable / Blue';
-          const dob = findVal(['fechanac', 'nacimiento', 'dob', 'fecha'], ['registro']) || new Date().toISOString().split('T')[0];
-          const breeder = findVal(['criador', 'breeder', 'criadero', 'kennel'], ['padre', 'madre']) || owner;
-          const country = findVal(['pais', 'country', 'nacion', 'origen']) || 'México / USA';
-          const pointsRaw = findVal(['puntos', 'points', 'pts']);
-          const points = parseInt(pointsRaw) || Math.floor(Math.random() * 150 + 50);
-          const titlesRaw = findVal(['titulos', 'titles', 'campeonato']);
-          const titles = titlesRaw ? titlesRaw.split(/[,;/]/).map(t => t.trim()).filter(Boolean) : (points >= 100 ? ['CH'] : []);
-
-          return {
-            regNumber: reg.toUpperCase(),
-            microchip: chip,
-            name: name.toUpperCase(),
-            breed,
-            variety,
-            gender,
-            color,
-            dob,
-            owner,
-            breeder,
-            country,
-            sire,
-            sireReg,
-            dam,
-            damReg,
-            points,
-            titles,
-            imageUrl: getBreedImageByIdOrName(breed),
-            status: 'ACTIVE_VALIDATED',
-          };
-        });
-
-        // Detect duplicate registration numbers inside the Excel sheet
-        const seen = new Set<string>();
-        const dupes = new Set<string>();
-        normalizedDogs.forEach((d) => {
-          const key = d.regNumber.trim().toUpperCase();
-          if (seen.has(key)) dupes.add(key);
-          else seen.add(key);
-        });
-        setDuplicateRegs(Array.from(dupes));
-        setParsedDogs(normalizedDogs);
+        extractFromWorkbook(workbook, initialChoice);
       } catch (err: any) {
         console.error(err);
+        setParsedDogs([]);
+        setDetectedCols(null);
         setErrorMessage(err.message || 'Error al procesar el archivo Excel. Asegúrate de que sea un archivo .xlsx, .xls o .csv.');
       } finally {
         setIsProcessing(false);
@@ -215,6 +333,18 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
     };
 
     reader.readAsArrayBuffer(file);
+  };
+
+  const handleSheetChange = (choice: string) => {
+    setSelectedSheet(choice);
+    if (!workbookState) return;
+    setErrorMessage(null);
+    try {
+      extractFromWorkbook(workbookState, choice);
+    } catch (err: any) {
+      setParsedDogs([]);
+      setErrorMessage(err.message || 'Esta pestaña no contiene registros válidos.');
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -247,6 +377,12 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
 
   const handleUploadAnother = () => {
     setParsedDogs([]);
+    setWorkbookState(null);
+    setSheetNames([]);
+    setDetectedCols(null);
+    setDuplicateRegs([]);
+    setDuplicateChips([]);
+    setMissingBreedCount(0);
     setFileName(null);
     setImportSuccess(null);
     setErrorMessage(null);
@@ -265,6 +401,12 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
       const count = res.count;
       setImportSuccess(count);
       setParsedDogs([]);
+      setWorkbookState(null);
+      setSheetNames([]);
+      setDetectedCols(null);
+      setDuplicateRegs([]);
+      setDuplicateChips([]);
+      setMissingBreedCount(0);
       setFileName(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -285,65 +427,26 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
     }
   };
 
-  // Generate and download template Excel
   const handleDownloadTemplate = () => {
     const templateData = [
       {
         'N° REGISTRO': 'INBR-99001',
         'MICROCHIP (15 DÍGITOS)': '981098108429999',
-        'NOMBRE DEL EJEMPLAR': 'DIAMOND KHALEEZI',
-        'RAZA': 'American Bully',
-        'VARIEDAD': 'Pocket',
-        'SEXO': 'Hembra',
-        'COLOR': 'Lilac Tri Ghost',
-        'FECHA NACIMIENTO': '2023-04-12',
-        'PADRE': 'KING VULCAN',
-        'REG PADRE': 'INBR-84920',
-        'MADRE': 'QUEEN BELLA',
-        'REG MADRE': 'INBR-00192',
-        'PROPIETARIO': 'Jonathan Garcia',
-        'CRIADERO': 'Imperial Bullyz',
-        'PAÍS': 'México / USA',
-        'PUNTOS': 180,
-        'TÍTULOS': 'CH, NAT CH',
-      },
-      {
-        'N° REGISTRO': 'INBR-99002',
-        'MICROCHIP (15 DÍGITOS)': '981098108429998',
-        'NOMBRE DEL EJEMPLAR': 'GOLIATH THE BEAST',
-        'RAZA': 'American Bully',
-        'VARIEDAD': 'XL',
+        'NOMBRE DEL EJEMPLAR': 'EJEMPLO SHAR PEI',
+        'RAZA': 'Shar Pei',
+        'VARIEDAD': 'Standard',
         'SEXO': 'Macho',
-        'COLOR': 'Blue Brindle',
-        'FECHA NACIMIENTO': '2022-11-20',
-        'PADRE': 'SUPREME DIABLO',
-        'REG PADRE': 'INBR-55201',
-        'MADRE': 'TEXAS STORM',
-        'REG MADRE': 'INBR-20212',
-        'PROPIETARIO': 'Carlos Otero',
-        'CRIADERO': 'Lone Star Bullies',
-        'PAÍS': 'USA',
-        'PUNTOS': 220,
-        'TÍTULOS': 'GR CH',
-      },
-      {
-        'N° REGISTRO': 'INBR-99003',
-        'MICROCHIP (15 DÍGITOS)': '981098108429997',
-        'NOMBRE DEL EJEMPLAR': 'ROYAL PARIS FLUFFY',
-        'RAZA': 'French Bulldog',
-        'VARIEDAD': 'Fluffy Exotic',
-        'SEXO': 'Hembra',
-        'COLOR': 'Isabella Visual',
-        'FECHA NACIMIENTO': '2023-08-01',
-        'PADRE': 'LADY VALKYRIE',
-        'REG PADRE': 'INBR-77119',
-        'MADRE': 'PARIS JEWEL',
-        'REG MADRE': 'INBR-31121',
-        'PROPIETARIO': 'Yordi Supremacy',
-        'CRIADERO': 'Supremacy Kennel',
-        'PAÍS': 'Perú',
-        'PUNTOS': 130,
-        'TÍTULOS': 'CH',
+        'COLOR': 'Fawn',
+        'FECHA NACIMIENTO': '2023-04-12',
+        'PADRE': 'PADRE EJEMPLO',
+        'REG PADRE': 'INBR-84920',
+        'MADRE': 'MADRE EJEMPLO',
+        'REG MADRE': 'INBR-00192',
+        'PROPIETARIO': 'Propietario Ejemplo',
+        'CRIADERO': 'Criadero Ejemplo',
+        'PAÍS': 'México',
+        'PUNTOS': 0,
+        'TÍTULOS': '',
       },
     ];
 
@@ -372,7 +475,7 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
                 </span>
               </div>
               <p className="text-xs text-neutral-400">
-                Sube tus planillas de Excel para poblar instantáneamente las bases de verificación y campeones INBR.
+                Sube tus planillas de Excel para poblar exactamente tus registros oficiales en Supabase sin alterar razas ni microchips.
               </p>
             </div>
           </div>
@@ -405,13 +508,13 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
               <span className="text-sm font-bold font-mono text-white">{dogs.length} Ejemplares</span>
             </div>
             <div className="p-3.5 rounded-xl bg-[#0D0D0D] border border-neutral-800 flex items-center justify-between">
-              <span className="text-xs text-neutral-400">Importados por Excel:</span>
+              <span className="text-xs text-neutral-400">Registros en Nube:</span>
               <span className="text-sm font-bold font-mono text-[#E7C888]">{totalCustomRecords} Ejemplares</span>
             </div>
             <div className="p-3.5 rounded-xl bg-[#0D0D0D] border border-neutral-800 flex items-center justify-between">
               <span className="text-xs text-neutral-400">Estado de Sincronización:</span>
               <span className="text-xs font-bold text-emerald-400 font-mono flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" /> MEMORIA & CLOUD
+                <CheckCircle2 className="w-3.5 h-3.5" /> SUPABASE DIRECTO
               </span>
             </div>
           </div>
@@ -444,7 +547,7 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
               Arrastra y suelta tu archivo Excel (.xlsx, .xls o .csv) aquí
             </h4>
             <p className="text-xs text-neutral-400 max-w-md mx-auto mb-4 leading-relaxed">
-              O haz clic para explorar tus carpetas. El sistema detectará automáticamente nombres de columnas como Registro, Microchip, Ejemplar, Raza, Padres, Propietario y Puntos.
+              O haz clic para explorar tus carpetas. Lee todas las hojas del archivo respetando la raza, microchip, folio y padres exactos de tu Excel.
             </p>
 
             <button
@@ -502,16 +605,87 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
           {/* Live Preview Table of Parsed Excel Rows */}
           {parsedDogs.length > 0 && (
             <div className="space-y-3 animate-fadeIn">
-              {duplicateRegs.length > 0 && (
+              {/* Sheet selector when workbook has multiple sheets */}
+              {sheetNames.length > 1 && (
+                <div className="p-3 rounded-xl bg-[#0D0D0D] border border-neutral-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="text-neutral-300 font-semibold">
+                    Archivo con {sheetNames.length} pestañas detectadas:
+                  </span>
+                  <select
+                    value={selectedSheet}
+                    onChange={(e) => handleSheetChange(e.target.value)}
+                    className="px-3 py-1.5 rounded-lg bg-[#181818] border border-[#C9A86A]/60 text-[#FFE885] font-mono text-xs"
+                  >
+                    <option value="__ALL__">Todas las hojas válidas ({sheetNames.length})</option>
+                    {sheetNames.map((s) => (
+                      <option key={s} value={s}>
+                        Solo hoja: {s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Detected Column Mapping Summary */}
+              {detectedCols && (
+                <div className="p-3.5 rounded-2xl bg-[#0B120F] border border-emerald-700/40 text-[11px] space-y-1.5">
+                  <div className="font-bold text-emerald-300 font-mono uppercase">
+                    Columnas detectadas en "{fileName}":
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-neutral-300 font-mono">
+                    <span>Registro: <strong className={detectedCols.reg ? 'text-white' : 'text-rose-400'}>{detectedCols.reg || 'NO DETECTADA'}</strong></span>
+                    <span>•</span>
+                    <span>Microchip: <strong className={detectedCols.chip ? 'text-white' : 'text-amber-400'}>{detectedCols.chip || 'NO DETECTADA'}</strong></span>
+                    <span>•</span>
+                    <span>Nombre: <strong className={detectedCols.name ? 'text-white' : 'text-amber-400'}>{detectedCols.name || 'NO DETECTADA'}</strong></span>
+                    <span>•</span>
+                    <span>Raza: <strong className={detectedCols.breed ? 'text-white' : 'text-rose-400'}>{detectedCols.breed || 'NO DETECTADA'}</strong></span>
+                    <span>•</span>
+                    <span>Padre: <strong className="text-white">{detectedCols.sire || '—'}</strong></span>
+                    <span>•</span>
+                    <span>Madre: <strong className="text-white">{detectedCols.dam || '—'}</strong></span>
+                  </div>
+                </div>
+              )}
+
+              {missingBreedCount > 0 && (
                 <div className="p-3.5 rounded-2xl bg-amber-950/60 border border-amber-500/70 text-amber-200 text-xs flex items-start gap-2.5">
                   <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                   <div>
                     <strong className="block text-amber-300">
-                      ⚠️ Atención: Se detectaron {duplicateRegs.length} números de registro repetidos dentro de este Excel
+                      Aviso: {missingBreedCount} filas no tenían columna o valor de Raza (quedarán como "SIN ESPECIFICAR")
                     </strong>
                     <span className="text-[11px] text-amber-200/90">
-                      Ejemplos: {duplicateRegs.slice(0, 5).join(', ')}. Revisa la tabla antes de importar para que no se sobrescriban perros distintos.
+                      Si tu Excel tiene la raza en otra columna, asegúrate de que el encabezado diga "RAZA" o "BREED" para que no se pierda.
                     </span>
+                  </div>
+                </div>
+              )}
+
+              {(duplicateRegs.length > 0 || duplicateChips.length > 0) && (
+                <div className="p-3.5 rounded-2xl bg-amber-950/60 border border-amber-500/70 text-amber-200 text-xs flex items-start gap-2.5">
+                  <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    {duplicateRegs.length > 0 && (
+                      <div>
+                        <strong className="block text-amber-300">
+                          ⚠️ Se detectaron {duplicateRegs.length} números de registro repetidos dentro de este Excel
+                        </strong>
+                        <span className="text-[11px] text-amber-200/90">
+                          Ejemplos: {duplicateRegs.slice(0, 5).join(', ')}
+                        </span>
+                      </div>
+                    )}
+                    {duplicateChips.length > 0 && (
+                      <div>
+                        <strong className="block text-amber-300">
+                          ⚠️ Se detectaron {duplicateChips.length} microchips repetidos dentro de este Excel
+                        </strong>
+                        <span className="text-[11px] text-amber-200/90">
+                          Ejemplos: {duplicateChips.slice(0, 5).join(', ')}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -526,10 +700,11 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
 
                 <button
                   onClick={handleCommitImport}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-black bg-gold-gradient hover:brightness-110 active:scale-95 shadow-xl transition-all"
+                  disabled={isProcessing}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-black bg-gold-gradient hover:brightness-110 active:scale-95 shadow-xl transition-all disabled:opacity-60"
                 >
                   <Database className="w-4 h-4" />
-                  <span>Integrar {parsedDogs.length} Ejemplares a la Base Oficial</span>
+                  <span>{isProcessing ? 'Guardando...' : `Integrar ${parsedDogs.length} Ejemplares a la Base Oficial`}</span>
                 </button>
               </div>
 
@@ -541,7 +716,7 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
                       <th className="py-2.5 px-3">N° Registro</th>
                       <th className="py-2.5 px-3">Microchip</th>
                       <th className="py-2.5 px-3">Nombre Ejemplar</th>
-                      <th className="py-2.5 px-3">Raza & Variedad</th>
+                      <th className="py-2.5 px-3">Raza</th>
                       <th className="py-2.5 px-3">Sexo</th>
                       <th className="py-2.5 px-3">Propietario / Criador</th>
                       <th className="py-2.5 px-3">Padre / Madre</th>
@@ -552,9 +727,11 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
                       <tr key={idx} className="hover:bg-[#1a1711] transition-colors">
                         <td className="py-2 px-3 text-neutral-500 font-mono">{idx + 1}</td>
                         <td className="py-2 px-3 font-mono font-bold text-[#E7C888]">{dog.regNumber}</td>
-                        <td className="py-2 px-3 font-mono text-neutral-400">{dog.microchip}</td>
+                        <td className="py-2 px-3 font-mono text-neutral-400">{dog.microchip || '—'}</td>
                         <td className="py-2 px-3 font-bold text-white">{dog.name}</td>
-                        <td className="py-2 px-3 text-neutral-300">{dog.breed} ({dog.variety})</td>
+                        <td className={`py-2 px-3 ${dog.breed === 'SIN ESPECIFICAR' ? 'text-amber-400 font-bold' : 'text-neutral-300'}`}>
+                          {dog.breed}
+                        </td>
                         <td className="py-2 px-3 text-neutral-400">{dog.gender}</td>
                         <td className="py-2 px-3 text-neutral-300 truncate max-w-[150px]">{dog.owner}</td>
                         <td className="py-2 px-3 text-neutral-400 truncate max-w-[150px]">
@@ -581,7 +758,7 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
               <span>¿Cómo deben venir las columnas en tus archivos Excel?</span>
             </div>
             <p className="leading-relaxed">
-              No te preocupes por el orden exacto. Nuestro motor inteligente detecta columnas con nombres como:
+              No te preocupes por el orden exacto. Nuestro motor detecta automáticamente columnas como:
               <span className="text-[#E7C888] font-mono"> Registro, Microchip, Nombre, Raza, Sexo, Color, Nacimiento, Padre, Madre, Propietario, Criador, País, Puntos</span>.
             </p>
           </div>
@@ -589,19 +766,28 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
 
         {/* Modal Bottom Controls */}
         <div className="p-4 bg-[#141414] border-t border-neutral-800 flex items-center justify-between">
-          {totalCustomRecords > 0 ? (
+          {dogs.length > 0 ? (
             <button
-              onClick={() => {
-                if (confirm('¿Deseas restaurar la base de datos a los ejemplares originales por defecto?')) {
-                  resetToDefaults();
-                  setParsedDogs([]);
-                  setImportSuccess(null);
+              type="button"
+              onClick={async () => {
+                if (confirm('¿ESTÁS SEGURO? Esto vaciará por completo TODOS los perros y registros de la base de datos en Supabase para dejarla en ceros.')) {
+                  setIsProcessing(true);
+                  const res = await clearAllDogs();
+                  setIsProcessing(false);
+                  if (res.success) {
+                    setParsedDogs([]);
+                    setImportSuccess(null);
+                    setErrorMessage(null);
+                  } else {
+                    setErrorMessage(res.error || 'No se pudo vaciar la base de datos.');
+                  }
                 }
               }}
-              className="text-xs text-neutral-400 hover:text-rose-400 transition-colors flex items-center gap-1"
+              disabled={isProcessing}
+              className="text-xs text-rose-400 hover:text-rose-300 transition-colors flex items-center gap-1.5 disabled:opacity-50"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Restaurar datos por defecto</span>
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Vaciar toda la base de datos</span>
             </button>
           ) : (
             <div />
@@ -618,9 +804,10 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
             {parsedDogs.length > 0 && (
               <button
                 onClick={handleCommitImport}
-                className="px-5 py-2 rounded-xl text-xs font-bold text-black bg-gold-gradient hover:brightness-110 active:scale-95 shadow-md"
+                disabled={isProcessing}
+                className="px-5 py-2 rounded-xl text-xs font-bold text-black bg-gold-gradient hover:brightness-110 active:scale-95 shadow-md disabled:opacity-60"
               >
-                Confirmar e Importar ({parsedDogs.length})
+                {isProcessing ? 'Guardando...' : `Confirmar e Importar (${parsedDogs.length})`}
               </button>
             )}
           </div>
