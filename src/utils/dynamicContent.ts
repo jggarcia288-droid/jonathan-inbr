@@ -5,6 +5,7 @@ import {
   fetchCmsConfigDirect, 
   subscribeToCmsConfig 
 } from '../lib/supabase';
+import { BREED_IMAGES, getBreedImageByIdOrName, isLegacyStockUrl } from './breedImages';
 
 export interface ExecutiveTeamMember {
   id: string;
@@ -427,8 +428,8 @@ export function mergeWithCanonicalChampions(incoming?: DynamicChampionItem[]): D
 export const DEFAULT_DYNAMIC_CONTENT: DynamicContentConfig = {
   textScale: 'normal',
   standardsPdfUrl: 'https://inbr-registry.org/standards/INBR_Official_Racial_Standards_2026.pdf',
-  specialEditionBanner1: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=1200&q=80',
-  specialEditionBanner2: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=1200&q=80',
+  specialEditionBanner1: BREED_IMAGES.nanoBull,
+  specialEditionBanner2: BREED_IMAGES.exoticBull,
   certificateOffsets: DEFAULT_CERTIFICATE_OFFSETS,
   certificateBackgroundUrl: '',
   certBackBackgroundUrl: '',
@@ -446,34 +447,34 @@ export const DEFAULT_DYNAMIC_CONTENT: DynamicContentConfig = {
     {
       id: 'sp-1',
       name: 'PHENOM NANO BULLET',
-      category: 'Nano Bully (<11 in)',
+      category: 'Nano Bull (<11 in)',
       regNumber: 'INBR-SP-001',
       owner: 'Jonathan Garcia',
       kennel: 'Imperial Bullyz International',
       height: '10.5 pulgadas',
-      imageUrl: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=600&q=80',
+      imageUrl: BREED_IMAGES.nanoBull,
       status: 'AUTORIZADO OFICIAL',
     },
     {
       id: 'sp-2',
-      name: 'CLEAN DIAMOND GHOST',
-      category: 'Clean Exotic',
+      name: 'EXOTIC DIAMOND GHOST',
+      category: 'Exotic Bull',
       regNumber: 'INBR-SP-002',
       owner: 'Carlos Otero',
       kennel: 'Lone Star Bullies',
       height: '12.0 pulgadas',
-      imageUrl: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=600&q=80',
+      imageUrl: BREED_IMAGES.exoticBull,
       status: 'AUTORIZADO OFICIAL',
     },
     {
       id: 'sp-3',
-      name: 'EXTREME POCKET TITAN',
-      category: 'Extreme Pocket',
+      name: 'MICRO BULLY TITAN',
+      category: 'Micro Bully',
       regNumber: 'INBR-SP-003',
       owner: 'Criadero Titan Oficial',
       kennel: 'Titan Bullyz Oficial',
-      height: '14.2 pulgadas',
-      imageUrl: 'https://images.unsplash.com/photo-1517849845537-4d257902454a?auto=format&fit=crop&w=600&q=80',
+      height: '13.5 pulgadas',
+      imageUrl: BREED_IMAGES.americanBully,
       status: 'AUTORIZADO OFICIAL',
     },
   ],
@@ -482,7 +483,7 @@ export const DEFAULT_DYNAMIC_CONTENT: DynamicContentConfig = {
   heroTitleLine2: 'BREEDS REGISTRY',
   heroSubtitle: 'Sistema internacional de registro genealógico, preservación morfológica y certificación de pedigrí oficial con trazabilidad genética.',
   heroBadge: 'AUTORIDAD CINOLÓGICA MUNDIAL • FAMILIA & PRESERVACIÓN',
-  heroBannerUrl: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=1400&q=80',
+  heroBannerUrl: BREED_IMAGES.heroBanner,
   bannerNotice: '¡Nuevas homologaciones directas habilitadas para la temporada 2026! Consulta el estado de autenticidad en tiempo real.',
 
   // Dynamic lists defaults
@@ -492,28 +493,28 @@ export const DEFAULT_DYNAMIC_CONTENT: DynamicContentConfig = {
       name: 'American Bully',
       variety: 'Pocket, Standard, Classic, XL',
       standard: 'Estructura ósea pesada, pecho amplio en barril y temperamento gentil.',
-      image: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=800&q=80',
+      image: BREED_IMAGES.americanBully,
     },
     {
       id: 'br-2',
-      name: 'Exotic Bully',
-      variety: 'Micro, Clean Exotic, Extreme',
+      name: 'Exotic Bull',
+      variety: 'Micro, Exotic, Nano Bull',
       standard: 'Hipertipicidad morfológica sin compromiso de vías respiratorias.',
-      image: 'https://images.unsplash.com/photo-1537151625747-768eb6cf92b2?auto=format&fit=crop&w=800&q=80',
+      image: BREED_IMAGES.exoticBull,
     },
     {
       id: 'br-3',
       name: 'French Bulldog',
       variety: 'Fawn, Brindle, Pied, Fluffy',
       standard: 'Orejas de murciélago erguidas, cuerpo compacto y osamenta densa.',
-      image: 'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?auto=format&fit=crop&w=800&q=80',
+      image: BREED_IMAGES.frenchBulldog,
     },
     {
       id: 'br-4',
       name: 'English Bulldog',
       variety: 'Standard Notariado',
       standard: 'Cabeza masiva simétrica, hombros amplios y marcha cadenciosa.',
-      image: 'https://images.unsplash.com/photo-1517849845537-4d257902454a?auto=format&fit=crop&w=800&q=80',
+      image: BREED_IMAGES.englishBulldog,
     },
   ],
   eventsList: [
@@ -524,7 +525,7 @@ export const DEFAULT_DYNAMIC_CONTENT: DynamicContentConfig = {
       location: 'NRG Park, Houston, Texas, USA',
       status: 'Inscripciones Abiertas',
       judges: 'Carlos Otero & Robert Felix',
-      banner: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=1000&q=80',
+      banner: BREED_IMAGES.heroBanner,
     },
     {
       id: 'ev-2',
@@ -533,7 +534,7 @@ export const DEFAULT_DYNAMIC_CONTENT: DynamicContentConfig = {
       location: 'WTC, Ciudad de México',
       status: 'Confirmado',
       judges: 'Michelle Lozano & Lic. Gallegos',
-      banner: 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?auto=format&fit=crop&w=1000&q=80',
+      banner: BREED_IMAGES.americanBully,
     },
     {
       id: 'ev-3',
@@ -542,7 +543,7 @@ export const DEFAULT_DYNAMIC_CONTENT: DynamicContentConfig = {
       location: 'Lima / Guayaquil',
       status: 'Próximamente',
       judges: 'Yordi Supremacy & Panel Internacional',
-      banner: 'https://images.unsplash.com/photo-1587300003388-59208cc962cb?auto=format&fit=crop&w=1000&q=80',
+      banner: BREED_IMAGES.exoticBull,
     },
   ],
   standardsList: [
@@ -557,8 +558,8 @@ export const DEFAULT_DYNAMIC_CONTENT: DynamicContentConfig = {
     },
     {
       id: 'std-2',
-      breed: 'Exotic Bully',
-      variety: 'Micro / Extreme',
+      breed: 'Exotic Bull',
+      variety: 'Micro / Nano Bull',
       height: 'Bajo 13.5 pulgadas a la cruz',
       head: 'Bloque masivo con stop a 90 grados',
       bite: 'Tijera o ligero prognatismo tolerable',
@@ -592,7 +593,7 @@ export const DEFAULT_DYNAMIC_CONTENT: DynamicContentConfig = {
       titles: 'Grand Champion Supreme & Reproductor de la Década',
       year: 'Consagrado 2023',
       owner: 'Jonathan García (Master CEO)',
-      image: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=800&q=80',
+      image: BREED_IMAGES.americanBully,
     },
     {
       id: 'hof-2',
@@ -600,7 +601,7 @@ export const DEFAULT_DYNAMIC_CONTENT: DynamicContentConfig = {
       titles: 'Champion de Estructura Morfológica',
       year: 'Consagrado 2024',
       owner: 'Criadero Élite INBR',
-      image: 'https://images.unsplash.com/photo-1537151625747-768eb6cf92b2?auto=format&fit=crop&w=800&q=80',
+      image: BREED_IMAGES.exoticBull,
     },
   ],
   breedersList: [
@@ -632,7 +633,7 @@ export const DEFAULT_DYNAMIC_CONTENT: DynamicContentConfig = {
   aboutUsSubtitle: 'Fundado en 2022 para establecer un registro transparente, familiar y ético sin monopolios.',
   aboutUsParagraph1: 'International Breeds Registry (INBR) surge del anhelo de criadores consagrados que exigían un registro sin favoritismos, con bases de datos públicas verificables y trámites expeditos.',
   aboutUsParagraph2: 'Hoy avalamos criaderos en más de 12 países, con un equipo de jueces internacionales y el sistema de trazabilidad de sangre más moderno del mundo.',
-  aboutUsPhoto: 'https://images.unsplash.com/photo-1544568100-847a948585b9?auto=format&fit=crop&w=1000&q=80',
+  aboutUsPhoto: BREED_IMAGES.heroBanner,
 
   // Equipo Directivo & Jueces
   teamBadge: 'EQUIPO INBR • LIDERAZGO & TRAYECTORIA',
@@ -868,8 +869,8 @@ export const DEFAULT_DYNAMIC_CONTENT: DynamicContentConfig = {
   hallOfFameTitle: 'Salón de la Fama Internacional',
   hallOfFameSubtitle: 'Los pilares genéticos y campeones mundiales que definen la excelencia morfológica de la INBR.',
   hallOfFameDescription: 'Homenaje permanente a los ejemplares fundadores que han dejado una huella indeleble en la cinofilia moderna con conformación estricta y salud respiratoria certificada.',
-  hallOfFamePhoto1: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=800&q=80',
-  hallOfFamePhoto2: 'https://images.unsplash.com/photo-1537151625747-768eb6cf92b2?auto=format&fit=crop&w=800&q=80',
+  hallOfFamePhoto1: BREED_IMAGES.americanBully,
+  hallOfFamePhoto2: BREED_IMAGES.exoticBull,
 
   // Razas & Estándares
   bullBreedsTitle: 'Nuestras Razas Oficiales Reconocidas',
@@ -882,34 +883,16 @@ export const DEFAULT_DYNAMIC_CONTENT: DynamicContentConfig = {
       subtitle: 'Compañero Supremo y Estructura Muscular',
       description: 'Perro compacto, potente, con gran osamenta, temperamento afable y equilibrio biomecánico.',
       varieties: ['Pocket', 'Standard', 'Classic', 'XL'],
-      image: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=700&q=80',
+      image: BREED_IMAGES.americanBully,
     },
     {
-      id: 'exotic-bully',
-      name: 'Exotic Bully',
+      id: 'exotic-bull',
+      name: 'Exotic Bull',
       category: 'bull',
       subtitle: 'Fenotipo Extremo y Agilidad Preservada',
       description: 'Evolución morfológica con máxima compactación, densidad ósea y apego al protocolo de salud INBR.',
-      varieties: ['Micro', 'Clean Exotic', 'Nano'],
-      image: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=700&q=80',
-    },
-    {
-      id: 'cane-corso',
-      name: 'Cane Corso Italiano',
-      category: 'guard',
-      subtitle: 'Moloso de Guardia y Protección Familiar',
-      description: 'Moloso potente, atlético y majestuoso. Mordida en ligero prognatismo, cuello musculoso y aplomos de gran firmeza.',
-      varieties: ['Negro', 'Gris Plomo', 'Leonado / Formentino'],
-      image: 'https://images.unsplash.com/photo-1568572933382-74d440642117?auto=format&fit=crop&w=700&q=80',
-    },
-    {
-      id: 'pastor-belga-malinois',
-      name: 'Pastor Belga Malinois',
-      category: 'work',
-      subtitle: 'Trabajo Deportivo, K9 e Inteligencia Operativa',
-      description: 'Canino de trabajo con potencia de mordida, máxima agilidad, impulsos equilibrados y líneas de trabajo consagradas.',
-      varieties: ['Línea de Ring Francés', 'Mondioring', 'K9 Operativo'],
-      image: 'https://images.unsplash.com/photo-1588943211346-090881b5782a?auto=format&fit=crop&w=700&q=80',
+      varieties: ['Micro Bully', 'Nano Bull', 'Exotic'],
+      image: BREED_IMAGES.exoticBull,
     },
     {
       id: 'french-bulldog',
@@ -918,7 +901,43 @@ export const DEFAULT_DYNAMIC_CONTENT: DynamicContentConfig = {
       subtitle: 'Moloso Compacto de Compañía',
       description: 'Cuerpo compacto, orejas de murciélago, pecho ancho y excelente respiración con narinas abiertas.',
       varieties: ['Estándar Fawn/Brindle', 'Fluffy', 'Visual Isabella'],
-      image: 'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?auto=format&fit=crop&w=700&q=80',
+      image: BREED_IMAGES.frenchBulldog,
+    },
+    {
+      id: 'english-bulldog',
+      name: 'English Bulldog',
+      category: 'bull',
+      subtitle: 'Bulldog Inglés Oficial',
+      description: 'Cuerpo ancho, pecho bajo y hombros poderosos. Cabeza masiva simétrica y marcha cadenciosa.',
+      varieties: ['Show Classic', 'Tri-Color', 'Heavy Bone'],
+      image: BREED_IMAGES.englishBulldog,
+    },
+    {
+      id: 'cane-corso',
+      name: 'Cane Corso Italiano',
+      category: 'guard',
+      subtitle: 'Moloso de Guardia y Protección Familiar',
+      description: 'Moloso potente, atlético y majestuoso. Mordida en ligero prognatismo, cuello musculoso y aplomos de gran firmeza.',
+      varieties: ['Negro', 'Gris Plomo', 'Leonado / Formentino'],
+      image: BREED_IMAGES.caneCorso,
+    },
+    {
+      id: 'pastor-aleman',
+      name: 'Pastor Alemán',
+      category: 'work',
+      subtitle: 'Trabajo, Guardia e Inteligencia Cinológica',
+      description: 'Perro pastor equilibrado, seguro de sí mismo, sumamente versátil en trabajo K9, obediencia y conformación oficial.',
+      varieties: ['Línea de Trabajo', 'Línea de Belleza', 'Negro y Fuego'],
+      image: BREED_IMAGES.pastorAleman,
+    },
+    {
+      id: 'pastor-belga-malinois',
+      name: 'Pastor Belga Malinois',
+      category: 'work',
+      subtitle: 'Trabajo Deportivo, K9 e Inteligencia Operativa',
+      description: 'Canino de trabajo con potencia de mordida, máxima agilidad, impulsos equilibrados y líneas de trabajo consagradas.',
+      varieties: ['Línea de Ring Francés', 'Mondioring', 'K9 Operativo'],
+      image: BREED_IMAGES.pastorBelgaMalinois,
     },
     {
       id: 'doberman',
@@ -927,7 +946,7 @@ export const DEFAULT_DYNAMIC_CONTENT: DynamicContentConfig = {
       subtitle: 'Elegancia, Firmeza y Máximo Carácter',
       description: 'Silueta esculpida, porte noble y lealtad incondicional. Excelente dorso firme y trote amplio elástico.',
       varieties: ['Línea Europea', 'Línea Americana'],
-      image: 'https://images.unsplash.com/photo-1601758228041-f3b2795255f1?auto=format&fit=crop&w=700&q=80',
+      image: BREED_IMAGES.doberman,
     },
     {
       id: 'rottweiler',
@@ -936,7 +955,7 @@ export const DEFAULT_DYNAMIC_CONTENT: DynamicContentConfig = {
       subtitle: 'Potencia, Determinación y Estructura Robusta',
       description: 'Canino de origen germano con cabeza potente, marcas de fuego delimitadas y temperamento equilibrado.',
       varieties: ['Línea ADRK', 'Línea de Belleza Internacional'],
-      image: 'https://images.unsplash.com/photo-1567752881298-894bb81f9379?auto=format&fit=crop&w=700&q=80',
+      image: BREED_IMAGES.rottweiler,
     },
     {
       id: 'american-pit-bull',
@@ -944,15 +963,15 @@ export const DEFAULT_DYNAMIC_CONTENT: DynamicContentConfig = {
       category: 'bull',
       subtitle: 'Raza Atlética de Rendimiento Histórico',
       description: 'Musculatura magra, impulsión posterior sobresaliente y tenacidad con enfoque deportivo oficial.',
-      varieties: ['Game Dog Tradicional', 'Conformación Deportiva'],
-      image: 'https://images.unsplash.com/photo-1576201836106-db1758fd1c97?auto=format&fit=crop&w=700&q=80',
+      varieties: ['Red Nose', 'Conformación Deportiva'],
+      image: BREED_IMAGES.apbt,
     },
   ],
   racialStandardsTitle: 'Estándares Raciales Oficiales Notariados',
   racialStandardsSubtitle: 'Descarga y consulta los manuales morfológicos aprobados ante el Comité Cinológico Internacional.',
   specialEditionTitle: 'Edición Especial: Preservación & Tipicidad',
   specialEditionSubtitle: 'Líneas exclusivas que representan el pináculo de la conformación corporal y la salud genética.',
-  specialEditionPhoto: 'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?auto=format&fit=crop&w=1000&q=80',
+  specialEditionPhoto: BREED_IMAGES.exoticBull,
 
   // Directorio Criadores & Eventos
   breedersTitle: 'Directorio Internacional de Criadores Verificados',
@@ -960,7 +979,7 @@ export const DEFAULT_DYNAMIC_CONTENT: DynamicContentConfig = {
   eventsTitle: 'Calendario Oficial de Circuitos & Campeonatos',
   eventsSubtitle: 'Exposiciones de conformación y copas mundiales avaladas por el cuerpo de jueces de la INBR.',
   eventsNotice: 'Temporada Oficial 2026: Houston World Cup, Gran Expo CDMX y Sudamérica Dog Fest.',
-  eventsBannerUrl: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=1200&q=80',
+  eventsBannerUrl: BREED_IMAGES.heroBanner,
 
   // Campeones & Verificación
   championsTitle: 'Tabla de Puntuación & Campeones Oficiales',
@@ -992,7 +1011,7 @@ export const DEFAULT_DYNAMIC_CONTENT: DynamicContentConfig = {
       id: 'gal-1',
       title: 'KING VULCAN • Grand Champion Supreme',
       category: 'champions',
-      imageUrl: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=1000&q=80',
+      imageUrl: BREED_IMAGES.americanBully,
       description: 'American Bully Standard #1 del ranking internacional, estructura ósea densa y movimiento simétrico.',
       date: 'Temporada 2026',
     },
@@ -1000,39 +1019,39 @@ export const DEFAULT_DYNAMIC_CONTENT: DynamicContentConfig = {
       id: 'gal-2',
       title: 'QUEEN BELLA • Mejor de Exposición CDMX',
       category: 'champions',
-      imageUrl: 'https://images.unsplash.com/photo-1537151625747-768eb6cf92b2?auto=format&fit=crop&w=1000&q=80',
-      description: 'Pocket hembra con fenotipo impecable y temperamento noble en ring.',
+      imageUrl: BREED_IMAGES.exoticBull,
+      description: 'Exotic Bull con fenotipo impecable y temperamento noble en ring.',
       date: 'Gran Expo CDMX',
     },
     {
       id: 'gal-3',
       title: 'Houston World Cup Ring de Juzgamiento',
       category: 'rings',
-      imageUrl: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=1000&q=80',
+      imageUrl: BREED_IMAGES.heroBanner,
       description: 'Cuerpo de jueces licenciados evaluando la mordida tijera y angulaciones de corvejón.',
       date: 'Houston, Texas',
     },
     {
       id: 'gal-4',
-      title: 'Camada Élite Microchipped F1',
+      title: 'Nano Bull • Línea Exclusiva INBR',
       category: 'litters',
-      imageUrl: 'https://images.unsplash.com/photo-1591160690555-5debfba289f0?auto=format&fit=crop&w=1000&q=80',
-      description: 'Lactancia y validación biométrica de 6 cachorros con microchips ISO 11784.',
+      imageUrl: BREED_IMAGES.nanoBull,
+      description: 'Ejemplar compacto Nano Bull con validación biométrica ISO 11784.',
       date: 'Auditado 2026',
     },
     {
       id: 'gal-5',
       title: 'Circuito Sudamericano Lima Rings',
       category: 'events',
-      imageUrl: 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?auto=format&fit=crop&w=1000&q=80',
-      description: 'Competencia abierta de Exotic Bully y conformación funcional.',
+      imageUrl: BREED_IMAGES.apbt,
+      description: 'Competencia abierta de Exotic Bull, American Bully y conformación funcional.',
       date: 'Lima, Perú',
     },
     {
       id: 'gal-6',
       title: 'IMPERIAL CORSAN • French Bulldog Champion',
       category: 'champions',
-      imageUrl: 'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?auto=format&fit=crop&w=1000&q=80',
+      imageUrl: BREED_IMAGES.frenchBulldog,
       description: 'Conformación compacta con vías respiratorias libres certificadas y ADN verificado.',
       date: 'Torneo Internacional',
     },
@@ -1146,6 +1165,62 @@ function safeSetLocalStorage(key: string, config: DynamicContentConfig) {
   }
 }
 
+export function sanitizeCertificateOffsets(
+  rawOffsets?: Partial<CertificateLayoutOffsets>,
+  hasCustomFrontBg?: boolean,
+  hasCustomBackBg?: boolean
+): CertificateLayoutOffsets {
+  const merged: CertificateLayoutOffsets = {
+    ...DEFAULT_CERTIFICATE_OFFSETS,
+    ...(rawOffsets || {}),
+  };
+
+  // Detect corrupted extreme test offsets saved before background separation fix
+  const logoX = Math.abs(merged.logoOffset?.x || 0);
+  const logoY = Math.abs(merged.logoOffset?.y || 0);
+  const regY = Math.abs(merged.regNumberOffset?.y || 0);
+  const dogX = Math.abs(merged.dogNameOffset?.x || 0);
+  const gpFont = merged.grandparentsOffset?.fontSize || 11;
+
+  const isLegacyBroken =
+    (!hasCustomFrontBg && (logoX > 260 || logoY > 200 || regY > 160 || dogX > 220)) ||
+    (!hasCustomBackBg && gpFont > 20);
+
+  if (isLegacyBroken) {
+    return { ...DEFAULT_CERTIFICATE_OFFSETS };
+  }
+
+  // Clamp individual coordinates to sane sheet bounds so fields never overlap footer signature or vanish off-sheet
+  const clampXY = (item: LayoutOffsetItem | undefined, maxX = 240, maxY = 180, minFont = 7, maxFont = 36): LayoutOffsetItem => {
+    const base = item || { x: 0, y: 0, fontSize: 13 };
+    return {
+      ...base,
+      x: Math.max(-maxX, Math.min(maxX, Number(base.x) || 0)),
+      y: Math.max(-maxY, Math.min(maxY, Number(base.y) || 0)),
+      fontSize: Math.max(minFont, Math.min(maxFont, Number(base.fontSize) || 13)),
+    };
+  };
+
+  return {
+    ...merged,
+    dogNameOffset: clampXY(merged.dogNameOffset, 220, 140, 14, 34),
+    regNumberOffset: clampXY(merged.regNumberOffset, 200, 110, 9, 22),
+    microchipOffset: clampXY(merged.microchipOffset, 200, 110, 9, 20),
+    breedOffset: clampXY(merged.breedOffset, 200, 110, 9, 20),
+    ownerOffset: clampXY(merged.ownerOffset, 200, 100, 9, 20),
+    breederOffset: clampXY(merged.breederOffset, 200, 100, 9, 20),
+    dobOffset: clampXY(merged.dobOffset, 200, 110, 9, 20),
+    colorOffset: clampXY(merged.colorOffset, 200, 110, 9, 20),
+    genderOffset: clampXY(merged.genderOffset, 200, 110, 9, 20),
+    dateOffset: clampXY(merged.dateOffset, 180, 60, 10, 22),
+    logoOffset: clampXY(merged.logoOffset, 260, 150, 9, 24),
+    qrOffset: { ...clampXY(merged.qrOffset, 220, 140, 10, 20), hidden: false },
+    sealOffset: clampXY(merged.sealOffset, 220, 140, 10, 22),
+    headerTitleOffset: clampXY(merged.headerTitleOffset, 180, 80, 14, 32),
+    grandparentsOffset: clampXY(merged.grandparentsOffset, 180, 120, 8, 16),
+  };
+}
+
 function sanitizeDynamicConfig(config: DynamicContentConfig): DynamicContentConfig {
   const isMauro = (str?: string) => {
     if (!str) return false;
@@ -1161,12 +1236,25 @@ function sanitizeDynamicConfig(config: DynamicContentConfig): DynamicContentConf
     return img || '';
   };
 
+  const cleanBreedTerm = (text?: string) => {
+    if (!text) return '';
+    return text
+      .replace(/Exotic\s*Bully/gi, 'Exotic Bull')
+      .replace(/Nano\s*Bully/gi, 'Nano Bull')
+      .replace(/Clean\s*Exotic/gi, 'Exotic Bull')
+      .replace(/Extreme\s*Pocket/gi, 'Micro Bully');
+  };
+
   const execList = Array.isArray(config.executiveTeam) ? config.executiveTeam : DEFAULT_DYNAMIC_CONTENT.executiveTeam;
   const repList = Array.isArray(config.representativesList) ? config.representativesList : DEFAULT_DYNAMIC_CONTENT.representativesList;
   const judList = Array.isArray(config.judgesList) ? config.judgesList : DEFAULT_DYNAMIC_CONTENT.judgesList;
   const evList = Array.isArray(config.eventsList) ? config.eventsList : DEFAULT_DYNAMIC_CONTENT.eventsList;
   const brdList = Array.isArray(config.breedersList) ? config.breedersList : DEFAULT_DYNAMIC_CONTENT.breedersList;
   const spList = Array.isArray(config.specialEditionList) ? config.specialEditionList : DEFAULT_DYNAMIC_CONTENT.specialEditionList;
+  const bullList = Array.isArray(config.bullBreedsList) && config.bullBreedsList.length > 0
+    ? config.bullBreedsList
+    : DEFAULT_DYNAMIC_CONTENT.bullBreedsList;
+  const galList = Array.isArray(config.galleryPhotos) ? config.galleryPhotos : DEFAULT_DYNAMIC_CONTENT.galleryPhotos;
   const rawOverrides = config.customTextOverrides || {};
 
   const cleanOverrides: Record<string, string> = {};
@@ -1176,9 +1264,83 @@ function sanitizeDynamicConfig(config: DynamicContentConfig): DynamicContentConf
     }
   });
 
+  // Migrate breed cards: clean terminology, replace legacy Unsplash stock photos with exact breed photos, ensure Pastor Alemán exists
+  const migratedBullBreeds = bullList.map((b) => {
+    const cleanedName = cleanBreedTerm(b.name);
+    const cleanedVarieties = (b.varieties || [])
+      .map((v) => {
+        const lower = v.trim().toLowerCase();
+        if (lower === 'clean exotic' || lower === 'clean') return 'Exotic';
+        if (lower === 'extreme pocket') return 'Pocket';
+        if (lower === 'nano' || lower === 'nano bully') return 'Nano Bull';
+        return cleanBreedTerm(v);
+      })
+      .filter((v, idx, arr) => v && arr.indexOf(v) === idx);
+
+    const img = isLegacyStockUrl(b.image)
+      ? getBreedImageByIdOrName(`${b.id} ${cleanedName}`)
+      : sanitizeImage(b.image);
+
+    return {
+      ...b,
+      name: cleanedName,
+      subtitle: cleanBreedTerm(b.subtitle),
+      description: cleanBreedTerm(b.description),
+      varieties: cleanedVarieties,
+      image: img,
+    };
+  });
+
+  const hasPastorAleman = migratedBullBreeds.some(
+    (b) => b.id === 'pastor-aleman' || b.name.toLowerCase().includes('pastor alemán') || b.name.toLowerCase().includes('pastor aleman')
+  );
+  if (!hasPastorAleman) {
+    const pastorDefault = DEFAULT_DYNAMIC_CONTENT.bullBreedsList.find((b) => b.id === 'pastor-aleman');
+    if (pastorDefault) {
+      migratedBullBreeds.push(pastorDefault);
+    }
+  }
+
   return {
     ...config,
-    heroBannerUrl: sanitizeImage(config.heroBannerUrl) || DEFAULT_DYNAMIC_CONTENT.heroBannerUrl,
+    certificateOffsets: sanitizeCertificateOffsets(
+      config.certificateOffsets,
+      Boolean(config.certificateBackgroundUrl),
+      Boolean(config.certBackBackgroundUrl)
+    ),
+    heroBannerUrl: isLegacyStockUrl(config.heroBannerUrl)
+      ? DEFAULT_DYNAMIC_CONTENT.heroBannerUrl
+      : sanitizeImage(config.heroBannerUrl) || DEFAULT_DYNAMIC_CONTENT.heroBannerUrl,
+    eventsBannerUrl: isLegacyStockUrl(config.eventsBannerUrl)
+      ? DEFAULT_DYNAMIC_CONTENT.eventsBannerUrl
+      : sanitizeImage(config.eventsBannerUrl) || DEFAULT_DYNAMIC_CONTENT.eventsBannerUrl,
+    aboutUsPhoto: isLegacyStockUrl(config.aboutUsPhoto)
+      ? DEFAULT_DYNAMIC_CONTENT.aboutUsPhoto
+      : sanitizeImage(config.aboutUsPhoto) || DEFAULT_DYNAMIC_CONTENT.aboutUsPhoto,
+    specialEditionBanner1: isLegacyStockUrl(config.specialEditionBanner1)
+      ? DEFAULT_DYNAMIC_CONTENT.specialEditionBanner1
+      : sanitizeImage(config.specialEditionBanner1) || DEFAULT_DYNAMIC_CONTENT.specialEditionBanner1,
+    specialEditionBanner2: isLegacyStockUrl(config.specialEditionBanner2)
+      ? DEFAULT_DYNAMIC_CONTENT.specialEditionBanner2
+      : sanitizeImage(config.specialEditionBanner2) || DEFAULT_DYNAMIC_CONTENT.specialEditionBanner2,
+    specialEditionPhoto: isLegacyStockUrl(config.specialEditionPhoto)
+      ? DEFAULT_DYNAMIC_CONTENT.specialEditionPhoto
+      : sanitizeImage(config.specialEditionPhoto) || DEFAULT_DYNAMIC_CONTENT.specialEditionPhoto,
+    hallOfFamePhoto1: isLegacyStockUrl(config.hallOfFamePhoto1)
+      ? DEFAULT_DYNAMIC_CONTENT.hallOfFamePhoto1
+      : sanitizeImage(config.hallOfFamePhoto1) || DEFAULT_DYNAMIC_CONTENT.hallOfFamePhoto1,
+    hallOfFamePhoto2: isLegacyStockUrl(config.hallOfFamePhoto2)
+      ? DEFAULT_DYNAMIC_CONTENT.hallOfFamePhoto2
+      : sanitizeImage(config.hallOfFamePhoto2) || DEFAULT_DYNAMIC_CONTENT.hallOfFamePhoto2,
+    bullBreedsList: migratedBullBreeds,
+    galleryPhotos: (galList || []).map((g) => ({
+      ...g,
+      title: cleanBreedTerm(g.title),
+      description: cleanBreedTerm(g.description),
+      imageUrl: isLegacyStockUrl(g.imageUrl)
+        ? getBreedImageByIdOrName(`${g.title} ${g.description || ''}`)
+        : sanitizeImage(g.imageUrl) || BREED_IMAGES.americanBully,
+    })),
     executiveTeam: execList
       .filter((e) => !isMauro(e.name) && !isMauro(e.title))
       .map((e) => ({ ...e, image: sanitizeImage(e.image) })),
@@ -1192,11 +1354,26 @@ function sanitizeDynamicConfig(config: DynamicContentConfig): DynamicContentConf
       ...ev,
       judges: (ev.judges || '').replace(/Mauro\s*Silva/gi, 'Carlos Otero & Juez Oficial'),
       title: (ev.title || '').replace(/Mauro\s*Silva/gi, 'Directiva Oficial INBR'),
+      banner: isLegacyStockUrl(ev.banner) ? BREED_IMAGES.heroBanner : sanitizeImage(ev.banner),
     })),
     breedersList: (brdList || [])
       .filter((b) => !isMauro(b.owner) && !isMauro(b.kennel)),
     specialEditionList: (spList || [])
-      .filter((s) => !isMauro(s.owner)),
+      .filter((s) => !isMauro(s.owner))
+      .map((s) => {
+        const cleanCat = cleanBreedTerm(s.category);
+        const cleanName = s.name
+          .replace(/CLEAN DIAMOND GHOST/i, 'EXOTIC DIAMOND GHOST')
+          .replace(/EXTREME POCKET TITAN/i, 'MICRO BULLY TITAN');
+        return {
+          ...s,
+          name: cleanName,
+          category: cleanCat,
+          imageUrl: isLegacyStockUrl(s.imageUrl)
+            ? getBreedImageByIdOrName(`${cleanCat} ${cleanName}`)
+            : sanitizeImage(s.imageUrl) || BREED_IMAGES.exoticBull,
+        };
+      }),
     customTextOverrides: cleanOverrides,
   };
 }

@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { useRegistry } from '../context/RegistryContext';
 import { DogRecord } from '../data/registryData';
+import { getBreedImageByIdOrName } from '../utils/breedImages';
 import confetti from 'canvas-confetti';
 import { 
   FileSpreadsheet, 
@@ -33,6 +34,7 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
   
   const [fileName, setFileName] = useState<string | null>(null);
   const [parsedDogs, setParsedDogs] = useState<DogRecord[]>([]);
+  const [duplicateRegs, setDuplicateRegs] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [importSuccess, setImportSuccess] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -75,31 +77,49 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
           throw new Error('El archivo Excel está vacío o no contiene filas con datos válidos.');
         }
 
-        // Map columns intelligently
+        // Map columns intelligently (exact key matches first, then partial matches)
         const normalizedDogs: DogRecord[] = rawJson.map((row, index) => {
           const keys = Object.keys(row);
 
           const findVal = (patterns: string[], exclude: string[] = []): string => {
-            for (const k of keys) {
-              const norm = normalizeKey(k);
-              if (exclude.some(ex => norm.includes(ex))) continue;
-              if (patterns.some(p => norm.includes(p))) {
-                return String(row[k]).trim();
+            // 1. Exact normalized header match first
+            for (const p of patterns) {
+              for (const k of keys) {
+                const norm = normalizeKey(k);
+                if (exclude.some(ex => norm.includes(ex))) continue;
+                if (norm === p) {
+                  const val = String(row[k] ?? '').trim();
+                  if (val) return val;
+                }
+              }
+            }
+            // 2. Partial header match in pattern priority order
+            for (const p of patterns) {
+              for (const k of keys) {
+                const norm = normalizeKey(k);
+                if (exclude.some(ex => norm.includes(ex))) continue;
+                if (norm.includes(p)) {
+                  const val = String(row[k] ?? '').trim();
+                  if (val) return val;
+                }
               }
             }
             return '';
           };
 
-          const reg = findVal(['registro', 'reg', 'codigo', 'inbr', 'id', 'folio'], ['padre', 'madre']) || `INBR-EXCEL-${1000 + index}`;
-          const chip = findVal(['microchip', 'chip', 'iso', 'rfid']) || `981098${Math.floor(100000000 + Math.random() * 900000000)}`;
+          const reg = findVal(
+            ['numeroregistro', 'noregistro', 'nroregistro', 'numero_registro', 'numregistro', 'folio', 'registro', 'regnumber', 'reg', 'codigo', 'inbr', 'id'],
+            ['padre', 'madre', 'sire', 'dam', 'fecha', 'tipo', 'region', 'estado', 'anterior', 'previo']
+          ) || `INBR-EXCEL-${1000 + index}`;
+          const chip = findVal(['microchip', 'chip', 'iso', 'rfid'], ['padre', 'madre']);
 
           // Distinct relational column extraction (avoid NOMBRE DEL PADRE / MADRE as dog name)
-          let name = findVal(['ejemplar', 'cachorro', 'cria', 'nombre'], ['padre', 'madre', 'sire', 'dam', 'propietario', 'dueno']);
-          const sire = findVal(['padre', 'sire', 'papa'], ['madre', 'dam', 'mama']) || 'INBR CHAMPION SIRE';
+          let name = findVal(['nombre', 'nombreejemplar', 'ejemplar', 'cachorro', 'cria'], ['padre', 'madre', 'sire', 'dam', 'propietario', 'dueno', 'criador', 'owner']);
+          const sire = findVal(['padre', 'sire', 'papa', 'idpadre'], ['madre', 'dam', 'mama', 'regpadre']) || 'INBR CHAMPION SIRE';
           const sireReg = findVal(['regpadre', 'sirereg', 'regsire']) || `REG-${sire.replace(/[^A-Za-z0-9]/g, '').toUpperCase()}`;
-          const dam = findVal(['madre', 'dam', 'mama'], ['padre', 'sire', 'papa']) || 'INBR CHAMPION DAM';
+          const dam = findVal(['madre', 'dam', 'mama', 'idmadre'], ['padre', 'sire', 'papa', 'regmadre']) || 'INBR CHAMPION DAM';
           const damReg = findVal(['regmadre', 'damreg', 'regdam']) || `REG-${dam.replace(/[^A-Za-z0-9]/g, '').toUpperCase()}`;
-          let owner = findVal(['propietario', 'dueno', 'owner', 'titular'], ['padre', 'madre', 'sire', 'dam']) || 'Criador Afiliado INBR';
+          let owner = findVal(['propietario', 'propietarionombre', 'dueno', 'owner', 'titular'], ['padre', 'madre', 'sire', 'dam']) || 'Criador Afiliado INBR';
 
           const isCamada = reg.toUpperCase().startsWith('CA');
 
@@ -116,11 +136,11 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
           }
 
           const breed = findVal(['raza', 'breed']) || 'American Bully';
-          const variety = findVal(['variedad', 'tipo', 'variety', 'clase']) || (isCamada ? 'Camada Registrada' : 'Standard');
+          const variety = findVal(['variedad', 'tipo', 'variety', 'clase'], ['registro']) || (isCamada ? 'Camada Registrada' : 'Standard');
           const genderRaw = findVal(['sexo', 'gender', 'sex']).toLowerCase();
           const gender = genderRaw.startsWith('h') || genderRaw.startsWith('f') ? 'Hembra' : 'Macho';
           const color = findVal(['color', 'manto', 'marcas']) || 'Sable / Blue';
-          const dob = findVal(['nacimiento', 'fecha', 'dob', 'fechanac']) || new Date().toISOString().split('T')[0];
+          const dob = findVal(['fechanac', 'nacimiento', 'dob', 'fecha'], ['registro']) || new Date().toISOString().split('T')[0];
           const breeder = findVal(['criador', 'breeder', 'criadero', 'kennel'], ['padre', 'madre']) || owner;
           const country = findVal(['pais', 'country', 'nacion', 'origen']) || 'México / USA';
           const pointsRaw = findVal(['puntos', 'points', 'pts']);
@@ -146,11 +166,20 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
             damReg,
             points,
             titles,
-            imageUrl: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=700&q=80',
+            imageUrl: getBreedImageByIdOrName(breed),
             status: 'ACTIVE_VALIDATED',
           };
         });
 
+        // Detect duplicate registration numbers inside the Excel sheet
+        const seen = new Set<string>();
+        const dupes = new Set<string>();
+        normalizedDogs.forEach((d) => {
+          const key = d.regNumber.trim().toUpperCase();
+          if (seen.has(key)) dupes.add(key);
+          else seen.add(key);
+        });
+        setDuplicateRegs(Array.from(dupes));
         setParsedDogs(normalizedDogs);
       } catch (err: any) {
         console.error(err);
@@ -448,6 +477,20 @@ export const ExcelDatabaseImporter: React.FC<ExcelDatabaseImporterProps> = ({
           {/* Live Preview Table of Parsed Excel Rows */}
           {parsedDogs.length > 0 && (
             <div className="space-y-3 animate-fadeIn">
+              {duplicateRegs.length > 0 && (
+                <div className="p-3.5 rounded-2xl bg-amber-950/60 border border-amber-500/70 text-amber-200 text-xs flex items-start gap-2.5">
+                  <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="block text-amber-300">
+                      ⚠️ Atención: Se detectaron {duplicateRegs.length} números de registro repetidos dentro de este Excel
+                    </strong>
+                    <span className="text-[11px] text-amber-200/90">
+                      Ejemplos: {duplicateRegs.slice(0, 5).join(', ')}. Revisa la tabla antes de importar para que no se sobrescriban perros distintos.
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-neutral-800">
                 <div className="flex items-center gap-2">
                   <Table className="w-4 h-4 text-[#C9A86A]" />

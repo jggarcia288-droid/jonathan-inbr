@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { BREED_IMAGES } from '../../utils/breedImages';
 import { 
   Award, 
   CreditCard, 
@@ -38,9 +39,12 @@ import {
   CertificateLayoutOffsets, 
   LayoutOffsetItem,
   DEFAULT_CERTIFICATE_OFFSETS, 
+  sanitizeCertificateOffsets,
   uploadCmsImage 
 } from '../../utils/dynamicContent';
 import { DogRecord } from '../../data/registryData';
+import { useRegistry } from '../../context/RegistryContext';
+import { buildEightGenPedigree } from '../../utils/pedigreeResolver';
 import { PedigreeQrBadge } from '../PedigreeQrBadge';
 
 interface AdminDocumentDesignerProps {
@@ -95,6 +99,7 @@ export const AdminDocumentDesigner: React.FC<AdminDocumentDesignerProps> = ({
   onCleanBackgroundModeChange,
   onSaveToSupabase,
 }) => {
+  const { dogs: allRegistryDogs } = useRegistry();
   const [docMode, setDocMode] = useState<'certificate_front' | 'certificate_back' | 'pvc'>('certificate_front');
   const [selectedDogIndex, setSelectedDogIndex] = useState<number>(0);
   const [selectedField, setSelectedField] = useState<string>('dogNameOffset');
@@ -137,14 +142,24 @@ export const AdminDocumentDesigner: React.FC<AdminDocumentDesignerProps> = ({
     setTimeout(() => setFeedback(null), 2500);
   };
 
-  // Local live offsets for instant 60fps responsiveness without lag
-  const [liveOffsets, setLiveOffsets] = useState<CertificateLayoutOffsets>(offsets);
-  const offsetsRef = useRef<CertificateLayoutOffsets>(offsets);
+  // Local live offsets for instant 60fps responsiveness without lag (sanitized against legacy extreme values)
+  const sanitizedIncomingOffsets = sanitizeCertificateOffsets(
+    offsets,
+    Boolean(certBackgroundUrl),
+    Boolean(certBackBackgroundUrl)
+  );
+  const [liveOffsets, setLiveOffsets] = useState<CertificateLayoutOffsets>(sanitizedIncomingOffsets);
+  const offsetsRef = useRef<CertificateLayoutOffsets>(sanitizedIncomingOffsets);
 
   useEffect(() => {
-    offsetsRef.current = offsets;
-    setLiveOffsets(offsets);
-  }, [offsets]);
+    const clean = sanitizeCertificateOffsets(
+      offsets,
+      Boolean(certBackgroundUrl),
+      Boolean(certBackBackgroundUrl)
+    );
+    offsetsRef.current = clean;
+    setLiveOffsets(clean);
+  }, [offsets, certBackgroundUrl, certBackBackgroundUrl]);
 
   // Custom text elements
   const [customTexts, setCustomTexts] = useState<CustomTextItem[]>([]);
@@ -621,9 +636,14 @@ export const AdminDocumentDesigner: React.FC<AdminDocumentDesignerProps> = ({
     damReg: 'F110011',
     points: 350,
     titles: ['CH'],
-    imageUrl: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=800&q=80',
+    imageUrl: BREED_IMAGES.americanBully,
     status: 'ACTIVE_VALIDATED' as const,
   };
+
+  const activePedigree = buildEightGenPedigree(
+    activeDog,
+    allRegistryDogs.length > 0 ? allRegistryDogs : sampleDogs
+  );
 
   const activeBackgroundUrl = 
     docMode === 'pvc' 
@@ -1189,7 +1209,7 @@ export const AdminDocumentDesigner: React.FC<AdminDocumentDesignerProps> = ({
                   </div>
 
                   {/* FIRMA DEL PRESIDENTE: Esquina inferior izquierda */}
-                  <div className="pt-3 border-t border-neutral-700/60 text-left">
+                  <div className="pt-3 border-t border-neutral-700/60 text-left relative z-20 shrink-0 mt-auto">
                     {renderInteractiveElement(
                       'dateOffset',
                       'Firma Presidente',
@@ -1857,7 +1877,7 @@ export const AdminDocumentDesigner: React.FC<AdminDocumentDesignerProps> = ({
                 ))}
 
                 {/* PIE DE PÁGINA NOTARIAL (FIRMA, SELLO DORADO, QR) */}
-                <div className="pt-3 border-t-2 border-[#D4AF37]/50 flex flex-wrap items-center justify-between text-neutral-800 gap-3">
+                <div className="mt-auto pt-4 border-t-2 border-[#D4AF37]/50 flex flex-wrap items-center justify-between text-neutral-800 gap-3 relative z-20 shrink-0">
                   {/* FIRMA NOTARIAL AUTÓGRAFA */}
                   <div className="text-left">
                     {renderInteractiveElement(
@@ -1984,8 +2004,8 @@ export const AdminDocumentDesigner: React.FC<AdminDocumentDesignerProps> = ({
                     'Padre (Sire)',
                     <div className="p-3 rounded-xl bg-white border border-neutral-300">
                       <span className="text-[9px] text-neutral-500 uppercase block font-bold">PADRE / SIRE (GEN 1):</span>
-                      <strong className="text-black text-sm block">{activeDog.sire || '777 CORSAN FIREUP'}</strong>
-                      <span className="text-[10px] text-neutral-600">REG: {activeDog.sireReg || 'INBR-777-01'}</span>
+                      <strong className="text-black text-sm block">{activePedigree.sire.name}</strong>
+                      <span className="text-[10px] text-neutral-600">REG: {activePedigree.sire.regNumber}</span>
                     </div>
                   )}
                 </div>
@@ -1996,8 +2016,8 @@ export const AdminDocumentDesigner: React.FC<AdminDocumentDesignerProps> = ({
                     'Madre (Dam)',
                     <div className="p-3 rounded-xl bg-white border border-neutral-300">
                       <span className="text-[9px] text-neutral-500 uppercase block font-bold">MADRE / DAM (GEN 1):</span>
-                      <strong className="text-black text-sm block">{activeDog.dam || 'YEYI 777'}</strong>
-                      <span className="text-[10px] text-neutral-600">REG: {activeDog.damReg || 'INBR-777-02'}</span>
+                      <strong className="text-black text-sm block">{activePedigree.dam.name}</strong>
+                      <span className="text-[10px] text-neutral-600">REG: {activePedigree.dam.regNumber}</span>
                     </div>
                   )}
                 </div>
@@ -2011,8 +2031,8 @@ export const AdminDocumentDesigner: React.FC<AdminDocumentDesignerProps> = ({
                   <div className="p-3 rounded-xl bg-white border border-neutral-300 space-y-1">
                     <span className="text-[9px] text-neutral-500 uppercase block font-bold">ABUELOS (GEN 2):</span>
                     <div className="grid grid-cols-2 gap-2 text-[10px]">
-                      <div>Pat: <strong>INBR PATERNAL SIRE</strong> / <strong>INBR PATERNAL DAM</strong></div>
-                      <div>Mat: <strong>DIESEL BULL</strong> / <strong>BELLA SUPREME</strong></div>
+                      <div>Pat: <strong>{activePedigree.sireSire.name}</strong> / <strong>{activePedigree.sireDam.name}</strong></div>
+                      <div>Mat: <strong>{activePedigree.damSire.name}</strong> / <strong>{activePedigree.damDam.name}</strong></div>
                     </div>
                   </div>
                 )}

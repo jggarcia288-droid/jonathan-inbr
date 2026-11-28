@@ -63,7 +63,7 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
   className = '',
   showExportButton = true,
 }) => {
-  const { dogs: allDogs, findDogByQuery } = useRegistry();
+  const { dogs: allDogs } = useRegistry();
 
   // Navigation & Canvas State - Set initial zoom to 0.72 so all 4 generations fit immediately
   const [zoom, setZoom] = useState<number>(0.72);
@@ -82,14 +82,9 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
   const containerRef = useRef<HTMLDivElement | null>(null);
   const treeCanvasRef = useRef<HTMLDivElement | null>(null);
 
-  // Build Hierarchical 4-Generation Tree
+  // Build Hierarchical 4-Generation Tree strictly from resolved lineage
   const rootNode = useMemo<PedigreeTreeNode>(() => {
     const rawPedigree: EightGenPedigree = buildEightGenPedigree(dog, allDogs);
-
-    const lookupDog = (regOrName?: string): DogRecord | undefined => {
-      if (!regOrName) return undefined;
-      return findDogByQuery(regOrName);
-    };
 
     // Gen 4 nodes builder helper
     const buildG4Node = (
@@ -98,15 +93,15 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
       gender: 'Macho' | 'Hembra',
       lineage: 'PATERNAL' | 'MATERNAL'
     ): PedigreeTreeNode => {
-      const g4Item = rawPedigree.g4[idx] || { name: 'ANCESTRO DESCONOCIDO', regNumber: `INBR-G4-${idx + 1}` };
-      const matched = lookupDog(g4Item.regNumber) || lookupDog(g4Item.name);
+      const g4Item = rawPedigree.g4[idx] || { name: 'SIN REGISTRO', regNumber: '—', color: 'Por registrar' };
+      const matched = g4Item.dogRecord;
       return {
         id,
         name: matched?.name || g4Item.name,
         regNumber: matched?.regNumber || g4Item.regNumber,
-        color: matched?.color || g4Item.color || 'COLOR NO REGISTRADO',
-        breed: matched?.breed || dog.breed,
-        titles: matched?.titles || [],
+        color: matched?.color || g4Item.color || 'Por registrar',
+        breed: matched?.breed || g4Item.breed || dog.breed,
+        titles: matched?.titles || g4Item.titles || [],
         gender,
         roleLabel: gender === 'Macho' ? 'Tatarabuelo' : 'Tatarabuela',
         generation: 4,
@@ -127,15 +122,15 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
       lineage: 'PATERNAL' | 'MATERNAL',
       g4StartIdx: number
     ): PedigreeTreeNode => {
-      const g3Item = rawPedigree.g3[idx] || { name: 'ANCESTRO DESCONOCIDO', regNumber: `INBR-G3-${idx + 1}` };
-      const matched = lookupDog(g3Item.regNumber) || lookupDog(g3Item.name);
+      const g3Item = rawPedigree.g3[idx] || { name: 'SIN REGISTRO', regNumber: '—', color: 'Por registrar' };
+      const matched = g3Item.dogRecord;
       return {
         id,
         name: matched?.name || g3Item.name,
         regNumber: matched?.regNumber || g3Item.regNumber,
-        color: matched?.color || g3Item.color || 'COLOR NO REGISTRADO',
-        breed: matched?.breed || dog.breed,
-        titles: matched?.titles || [],
+        color: matched?.color || g3Item.color || 'Por registrar',
+        breed: matched?.breed || g3Item.breed || dog.breed,
+        titles: matched?.titles || g3Item.titles || [],
         gender,
         roleLabel: gender === 'Macho' ? 'Bisabuelo' : 'Bisabuela',
         generation: 3,
@@ -151,15 +146,14 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
     };
 
     // Gen 2 Grandparents
-    // 1. Sire's Sire
-    const ssMatched = lookupDog(rawPedigree.sireSire.regNumber) || lookupDog(rawPedigree.sireSire.name);
+    const ssMatched = rawPedigree.sireSire.dogRecord;
     const nodeSireSire: PedigreeTreeNode = {
       id: 'ss',
       name: ssMatched?.name || rawPedigree.sireSire.name,
       regNumber: ssMatched?.regNumber || rawPedigree.sireSire.regNumber,
-      color: ssMatched?.color || rawPedigree.sireSire.color || 'WHITE',
-      breed: ssMatched?.breed || dog.breed,
-      titles: ssMatched?.titles || [],
+      color: ssMatched?.color || rawPedigree.sireSire.color || 'Por registrar',
+      breed: ssMatched?.breed || rawPedigree.sireSire.breed || dog.breed,
+      titles: ssMatched?.titles || rawPedigree.sireSire.titles || [],
       gender: 'Macho',
       roleLabel: 'Abuelo Paterno',
       generation: 2,
@@ -173,15 +167,14 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
       dam: buildG3Node('ssd', 1, 'Hembra', 'PATERNAL', 2),
     };
 
-    // 2. Sire's Dam
-    const sdMatched = lookupDog(rawPedigree.sireDam.regNumber) || lookupDog(rawPedigree.sireDam.name);
+    const sdMatched = rawPedigree.sireDam.dogRecord;
     const nodeSireDam: PedigreeTreeNode = {
       id: 'sd',
       name: sdMatched?.name || rawPedigree.sireDam.name,
       regNumber: sdMatched?.regNumber || rawPedigree.sireDam.regNumber,
-      color: sdMatched?.color || rawPedigree.sireDam.color || 'BLUE AND WHITE',
-      breed: sdMatched?.breed || dog.breed,
-      titles: sdMatched?.titles || [],
+      color: sdMatched?.color || rawPedigree.sireDam.color || 'Por registrar',
+      breed: sdMatched?.breed || rawPedigree.sireDam.breed || dog.breed,
+      titles: sdMatched?.titles || rawPedigree.sireDam.titles || [],
       gender: 'Hembra',
       roleLabel: 'Abuela Paterna',
       generation: 2,
@@ -195,15 +188,14 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
       dam: buildG3Node('sdd', 3, 'Hembra', 'PATERNAL', 6),
     };
 
-    // 3. Dam's Sire
-    const dsMatched = lookupDog(rawPedigree.damSire.regNumber) || lookupDog(rawPedigree.damSire.name);
+    const dsMatched = rawPedigree.damSire.dogRecord;
     const nodeDamSire: PedigreeTreeNode = {
       id: 'ds',
       name: dsMatched?.name || rawPedigree.damSire.name,
       regNumber: dsMatched?.regNumber || rawPedigree.damSire.regNumber,
-      color: dsMatched?.color || rawPedigree.damSire.color || 'WHITE AND BLUE TICKED',
-      breed: dsMatched?.breed || dog.breed,
-      titles: dsMatched?.titles || [],
+      color: dsMatched?.color || rawPedigree.damSire.color || 'Por registrar',
+      breed: dsMatched?.breed || rawPedigree.damSire.breed || dog.breed,
+      titles: dsMatched?.titles || rawPedigree.damSire.titles || [],
       gender: 'Macho',
       roleLabel: 'Abuelo Materno',
       generation: 2,
@@ -217,15 +209,14 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
       dam: buildG3Node('dsd', 5, 'Hembra', 'MATERNAL', 10),
     };
 
-    // 4. Dam's Dam
-    const ddMatched = lookupDog(rawPedigree.damDam.regNumber) || lookupDog(rawPedigree.damDam.name);
+    const ddMatched = rawPedigree.damDam.dogRecord;
     const nodeDamDam: PedigreeTreeNode = {
       id: 'dd',
       name: ddMatched?.name || rawPedigree.damDam.name,
       regNumber: ddMatched?.regNumber || rawPedigree.damDam.regNumber,
-      color: ddMatched?.color || rawPedigree.damDam.color || 'WHITE',
-      breed: ddMatched?.breed || dog.breed,
-      titles: ddMatched?.titles || [],
+      color: ddMatched?.color || rawPedigree.damDam.color || 'Por registrar',
+      breed: ddMatched?.breed || rawPedigree.damDam.breed || dog.breed,
+      titles: ddMatched?.titles || rawPedigree.damDam.titles || [],
       gender: 'Hembra',
       roleLabel: 'Abuela Materna',
       generation: 2,
@@ -240,14 +231,14 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
     };
 
     // Gen 1 Parents
-    const sireMatched = lookupDog(dog.sireReg) || lookupDog(dog.sire);
+    const sireMatched = rawPedigree.sire.dogRecord;
     const nodeSire: PedigreeTreeNode = {
       id: 's',
       name: sireMatched?.name || rawPedigree.sire.name,
       regNumber: sireMatched?.regNumber || rawPedigree.sire.regNumber,
-      color: sireMatched?.color || rawPedigree.sire.color || 'LILAC AND WHITE',
-      breed: sireMatched?.breed || dog.breed,
-      titles: sireMatched?.titles || ['CH'],
+      color: sireMatched?.color || rawPedigree.sire.color || 'Por registrar',
+      breed: sireMatched?.breed || rawPedigree.sire.breed || dog.breed,
+      titles: sireMatched?.titles || rawPedigree.sire.titles || [],
       gender: 'Macho',
       roleLabel: 'Padre (Sire)',
       generation: 1,
@@ -261,14 +252,14 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
       dam: nodeSireDam,
     };
 
-    const damMatched = lookupDog(dog.damReg) || lookupDog(dog.dam);
+    const damMatched = rawPedigree.dam.dogRecord;
     const nodeDam: PedigreeTreeNode = {
       id: 'd',
       name: damMatched?.name || rawPedigree.dam.name,
       regNumber: damMatched?.regNumber || rawPedigree.dam.regNumber,
-      color: damMatched?.color || rawPedigree.damDam.color || 'WHITE AND BLUE TICKED',
-      breed: damMatched?.breed || dog.breed,
-      titles: damMatched?.titles || [],
+      color: damMatched?.color || rawPedigree.dam.color || 'Por registrar',
+      breed: damMatched?.breed || rawPedigree.dam.breed || dog.breed,
+      titles: damMatched?.titles || rawPedigree.dam.titles || [],
       gender: 'Hembra',
       roleLabel: 'Madre (Dam)',
       generation: 1,
@@ -302,7 +293,7 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
       sire: nodeSire,
       dam: nodeDam,
     };
-  }, [dog, allDogs, findDogByQuery]);
+  }, [dog, allDogs]);
 
   // Compute Active Highlight Ancestor Path IDs
   const activePathIds = useMemo<Set<string>>(() => {
@@ -629,12 +620,27 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
   const renderTreeBranches = () => {
     if (!rootNode) return null;
 
-    // Helper to evaluate if node branch is collapsed or beyond current generation limit
-    const shouldShow = (node?: PedigreeTreeNode) => {
-      if (!node) return false;
-      if (node.generation > maxGenerations) return false;
-      return true;
-    };
+    const showSireBranch = !collapsedIds.has('s');
+    const showDamBranch = !collapsedIds.has('d');
+    const showGen2 = maxGenerations >= 2 && (showSireBranch || showDamBranch);
+
+    const showSS = showSireBranch && !collapsedIds.has('ss');
+    const showSD = showSireBranch && !collapsedIds.has('sd');
+    const showDS = showDamBranch && !collapsedIds.has('ds');
+    const showDD = showDamBranch && !collapsedIds.has('dd');
+    const showGen3 = maxGenerations >= 3 && (showSS || showSD || showDS || showDD);
+
+    const showSSS = showSS && !collapsedIds.has('sss');
+    const showSSD = showSS && !collapsedIds.has('ssd');
+    const showSDS = showSD && !collapsedIds.has('sds');
+    const showSDD = showSD && !collapsedIds.has('sdd');
+    const showDSS = showDS && !collapsedIds.has('dss');
+    const showDSD = showDS && !collapsedIds.has('dsd');
+    const showDDS = showDD && !collapsedIds.has('dds');
+    const showDDD = showDD && !collapsedIds.has('ddd');
+    const showGen4 =
+      maxGenerations >= 4 &&
+      (showSSS || showSSD || showSDS || showSDD || showDSS || showDSD || showDDS || showDDD);
 
     return (
       <div className="flex items-center gap-12 sm:gap-16 py-8 px-4 min-w-max select-none">
@@ -666,93 +672,105 @@ export const InteractivePedigreeTree: React.FC<InteractivePedigreeTreeProps> = (
         )}
 
         {/* Col 2: Grandparents (4) */}
-        {maxGenerations >= 2 && !collapsedIds.has('s') && !collapsedIds.has('d') && (
+        {showGen2 && (
           <div className="flex flex-col justify-around gap-8 shrink-0">
             {/* Paternal Grandparents */}
-            <div className="flex flex-col gap-6 p-2 rounded-2xl border border-blue-900/30 bg-blue-950/10">
-              <span className="text-[9px] font-mono font-bold text-blue-400 uppercase text-left pl-1">
-                LÍNEA PATERNA (ABUELOS)
-              </span>
-              {rootNode.sire?.sire && renderNodeCard(rootNode.sire.sire, true)}
-              {rootNode.sire?.dam && renderNodeCard(rootNode.sire.dam, true)}
-            </div>
+            {showSireBranch && (
+              <div className="flex flex-col gap-6 p-2 rounded-2xl border border-blue-900/30 bg-blue-950/10">
+                <span className="text-[9px] font-mono font-bold text-blue-400 uppercase text-left pl-1">
+                  LÍNEA PATERNA (ABUELOS)
+                </span>
+                {rootNode.sire?.sire && renderNodeCard(rootNode.sire.sire, true)}
+                {rootNode.sire?.dam && renderNodeCard(rootNode.sire.dam, true)}
+              </div>
+            )}
 
             {/* Maternal Grandparents */}
-            <div className="flex flex-col gap-6 p-2 rounded-2xl border border-rose-900/30 bg-rose-950/10">
-              <span className="text-[9px] font-mono font-bold text-rose-400 uppercase text-left pl-1">
-                LÍNEA MATERNA (ABUELOS)
-              </span>
-              {rootNode.dam?.sire && renderNodeCard(rootNode.dam.sire, true)}
-              {rootNode.dam?.dam && renderNodeCard(rootNode.dam.dam, true)}
-            </div>
+            {showDamBranch && (
+              <div className="flex flex-col gap-6 p-2 rounded-2xl border border-rose-900/30 bg-rose-950/10">
+                <span className="text-[9px] font-mono font-bold text-rose-400 uppercase text-left pl-1">
+                  LÍNEA MATERNA (ABUELOS)
+                </span>
+                {rootNode.dam?.sire && renderNodeCard(rootNode.dam.sire, true)}
+                {rootNode.dam?.dam && renderNodeCard(rootNode.dam.dam, true)}
+              </div>
+            )}
           </div>
         )}
 
         {/* Col 3: Great-Grandparents (8 Bisabuelos) */}
-        {maxGenerations >= 3 && (
+        {showGen3 && (
           <div className="flex flex-col justify-around gap-4 shrink-0">
             {/* Paternal Bisabuelos */}
-            <div className="flex flex-col gap-3 p-2 rounded-xl border border-blue-900/20 bg-blue-950/5">
-              <span className="text-[9px] font-mono font-bold text-blue-400 uppercase text-left pl-1">
-                GEN 3: BISABUELOS PATERNOS
-              </span>
-              {rootNode.sire?.sire?.sire && renderNodeCard(rootNode.sire.sire.sire, true)}
-              {rootNode.sire?.sire?.dam && renderNodeCard(rootNode.sire.sire.dam, true)}
-              {rootNode.sire?.dam?.sire && renderNodeCard(rootNode.sire.dam.sire, true)}
-              {rootNode.sire?.dam?.dam && renderNodeCard(rootNode.sire.dam.dam, true)}
-            </div>
+            {(showSS || showSD) && (
+              <div className="flex flex-col gap-3 p-2 rounded-xl border border-blue-900/20 bg-blue-950/5">
+                <span className="text-[9px] font-mono font-bold text-blue-400 uppercase text-left pl-1">
+                  GEN 3: BISABUELOS PATERNOS
+                </span>
+                {showSS && rootNode.sire?.sire?.sire && renderNodeCard(rootNode.sire.sire.sire, true)}
+                {showSS && rootNode.sire?.sire?.dam && renderNodeCard(rootNode.sire.sire.dam, true)}
+                {showSD && rootNode.sire?.dam?.sire && renderNodeCard(rootNode.sire.dam.sire, true)}
+                {showSD && rootNode.sire?.dam?.dam && renderNodeCard(rootNode.sire.dam.dam, true)}
+              </div>
+            )}
 
             {/* Maternal Bisabuelos */}
-            <div className="flex flex-col gap-3 p-2 rounded-xl border border-rose-900/20 bg-rose-950/5">
-              <span className="text-[9px] font-mono font-bold text-rose-400 uppercase text-left pl-1">
-                GEN 3: BISABUELOS MATERNOS
-              </span>
-              {rootNode.dam?.sire?.sire && renderNodeCard(rootNode.dam.sire.sire, true)}
-              {rootNode.dam?.sire?.dam && renderNodeCard(rootNode.dam.sire.dam, true)}
-              {rootNode.dam?.dam?.sire && renderNodeCard(rootNode.dam.dam.sire, true)}
-              {rootNode.dam?.dam?.dam && renderNodeCard(rootNode.dam.dam.dam, true)}
-            </div>
+            {(showDS || showDD) && (
+              <div className="flex flex-col gap-3 p-2 rounded-xl border border-rose-900/20 bg-rose-950/5">
+                <span className="text-[9px] font-mono font-bold text-rose-400 uppercase text-left pl-1">
+                  GEN 3: BISABUELOS MATERNOS
+                </span>
+                {showDS && rootNode.dam?.sire?.sire && renderNodeCard(rootNode.dam.sire.sire, true)}
+                {showDS && rootNode.dam?.sire?.dam && renderNodeCard(rootNode.dam.sire.dam, true)}
+                {showDD && rootNode.dam?.dam?.sire && renderNodeCard(rootNode.dam.dam.sire, true)}
+                {showDD && rootNode.dam?.dam?.dam && renderNodeCard(rootNode.dam.dam.dam, true)}
+              </div>
+            )}
           </div>
         )}
 
         {/* Col 4: Great-Great-Grandparents (16 Tatarabuelos Completos) */}
-        {maxGenerations >= 4 && (
+        {showGen4 && (
           <div className="flex flex-col justify-around gap-6 shrink-0">
             {/* 8 Tatarabuelos Paternos */}
-            <div className="flex flex-col gap-2 p-3 rounded-2xl border border-blue-900/40 bg-blue-950/20 shadow-lg">
-              <span className="text-[9.5px] font-mono font-bold text-blue-400 uppercase text-left pl-1">
-                GEN 4: 8 TATARABUELOS PATERNOS (LÍNEA SIRE)
-              </span>
+            {(showSSS || showSSD || showSDS || showSDD) && (
+              <div className="flex flex-col gap-2 p-3 rounded-2xl border border-blue-900/40 bg-blue-950/20 shadow-lg">
+                <span className="text-[9.5px] font-mono font-bold text-blue-400 uppercase text-left pl-1">
+                  GEN 4: 8 TATARABUELOS PATERNOS (LÍNEA SIRE)
+                </span>
 
-              <div className="grid grid-cols-2 gap-2">
-                {rootNode.sire?.sire?.sire?.sire && renderNodeCard(rootNode.sire.sire.sire.sire, false)}
-                {rootNode.sire?.sire?.sire?.dam && renderNodeCard(rootNode.sire.sire.sire.dam, false)}
-                {rootNode.sire?.sire?.dam?.sire && renderNodeCard(rootNode.sire.sire.dam.sire, false)}
-                {rootNode.sire?.sire?.dam?.dam && renderNodeCard(rootNode.sire.sire.dam.dam, false)}
-                {rootNode.sire?.dam?.sire?.sire && renderNodeCard(rootNode.sire.dam.sire.sire, false)}
-                {rootNode.sire?.dam?.sire?.dam && renderNodeCard(rootNode.sire.dam.sire.dam, false)}
-                {rootNode.sire?.dam?.dam?.sire && renderNodeCard(rootNode.sire.dam.dam.sire, false)}
-                {rootNode.sire?.dam?.dam?.dam && renderNodeCard(rootNode.sire.dam.dam.dam, false)}
+                <div className="grid grid-cols-2 gap-2">
+                  {showSSS && rootNode.sire?.sire?.sire?.sire && renderNodeCard(rootNode.sire.sire.sire.sire, false)}
+                  {showSSS && rootNode.sire?.sire?.sire?.dam && renderNodeCard(rootNode.sire.sire.sire.dam, false)}
+                  {showSSD && rootNode.sire?.sire?.dam?.sire && renderNodeCard(rootNode.sire.sire.dam.sire, false)}
+                  {showSSD && rootNode.sire?.sire?.dam?.dam && renderNodeCard(rootNode.sire.sire.dam.dam, false)}
+                  {showSDS && rootNode.sire?.dam?.sire?.sire && renderNodeCard(rootNode.sire.dam.sire.sire, false)}
+                  {showSDS && rootNode.sire?.dam?.sire?.dam && renderNodeCard(rootNode.sire.dam.sire.dam, false)}
+                  {showSDD && rootNode.sire?.dam?.dam?.sire && renderNodeCard(rootNode.sire.dam.dam.sire, false)}
+                  {showSDD && rootNode.sire?.dam?.dam?.dam && renderNodeCard(rootNode.sire.dam.dam.dam, false)}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* 8 Tatarabuelos Maternos */}
-            <div className="flex flex-col gap-2 p-3 rounded-2xl border border-rose-900/40 bg-rose-950/20 shadow-lg">
-              <span className="text-[9.5px] font-mono font-bold text-rose-400 uppercase text-left pl-1">
-                GEN 4: 8 TATARABUELOS MATERNOS (LÍNEA DAM)
-              </span>
+            {(showDSS || showDSD || showDDS || showDDD) && (
+              <div className="flex flex-col gap-2 p-3 rounded-2xl border border-rose-900/40 bg-rose-950/20 shadow-lg">
+                <span className="text-[9.5px] font-mono font-bold text-rose-400 uppercase text-left pl-1">
+                  GEN 4: 8 TATARABUELOS MATERNOS (LÍNEA DAM)
+                </span>
 
-              <div className="grid grid-cols-2 gap-2">
-                {rootNode.dam?.sire?.sire?.sire && renderNodeCard(rootNode.dam.sire.sire.sire, false)}
-                {rootNode.dam?.sire?.sire?.dam && renderNodeCard(rootNode.dam.sire.sire.dam, false)}
-                {rootNode.dam?.sire?.dam?.sire && renderNodeCard(rootNode.dam.sire.dam.sire, false)}
-                {rootNode.dam?.sire?.dam?.dam && renderNodeCard(rootNode.dam.sire.dam.dam, false)}
-                {rootNode.dam?.dam?.sire?.sire && renderNodeCard(rootNode.dam.dam.sire.sire, false)}
-                {rootNode.dam?.dam?.sire?.dam && renderNodeCard(rootNode.dam.dam.sire.dam, false)}
-                {rootNode.dam?.dam?.dam?.sire && renderNodeCard(rootNode.dam.dam.dam.sire, false)}
-                {rootNode.dam?.dam?.dam?.dam && renderNodeCard(rootNode.dam.dam.dam.dam, false)}
+                <div className="grid grid-cols-2 gap-2">
+                  {showDSS && rootNode.dam?.sire?.sire?.sire && renderNodeCard(rootNode.dam.sire.sire.sire, false)}
+                  {showDSS && rootNode.dam?.sire?.sire?.dam && renderNodeCard(rootNode.dam.sire.sire.dam, false)}
+                  {showDSD && rootNode.dam?.sire?.dam?.sire && renderNodeCard(rootNode.dam.sire.dam.sire, false)}
+                  {showDSD && rootNode.dam?.sire?.dam?.dam && renderNodeCard(rootNode.dam.sire.dam.dam, false)}
+                  {showDDS && rootNode.dam?.dam?.sire?.sire && renderNodeCard(rootNode.dam.dam.sire.sire, false)}
+                  {showDDS && rootNode.dam?.dam?.sire?.dam && renderNodeCard(rootNode.dam.dam.sire.dam, false)}
+                  {showDDD && rootNode.dam?.dam?.dam?.sire && renderNodeCard(rootNode.dam.dam.dam.sire, false)}
+                  {showDDD && rootNode.dam?.dam?.dam?.dam && renderNodeCard(rootNode.dam.dam.dam.dam, false)}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
       </div>

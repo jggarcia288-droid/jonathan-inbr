@@ -81,6 +81,7 @@ export async function fetchAllSupabaseDogs(): Promise<SupabasePerro[]> {
         .from('perros')
         .select('*')
         .order('created_at', { ascending: false })
+        .order('numero_registro', { ascending: true })
         .range(from, to);
 
       if (error) {
@@ -108,10 +109,50 @@ export async function fetchAllSupabaseDogs(): Promise<SupabasePerro[]> {
   }
 }
 
+function isValidChipValue(chip?: string | null): boolean {
+  if (!chip) return false;
+  const cleaned = chip.trim().toUpperCase();
+  if (!cleaned || cleaned === 'XXX' || cleaned === 'N/A' || cleaned === 'NO' || cleaned === 'NONE' || cleaned === 'SIN CHIP') {
+    return false;
+  }
+  const digits = cleaned.replace(/\D/g, '');
+  return digits.length >= 6;
+}
+
+function mergePerroVariants(rows: SupabasePerro[]): SupabasePerro {
+  if (rows.length === 1) return rows[0];
+  const scored = [...rows].sort((a, b) => {
+    const score = (r: SupabasePerro) => {
+      let s = 0;
+      if (isValidChipValue(r.chip)) s += 10;
+      if (r.id_padre && r.id_padre.trim().toUpperCase() !== 'XXX') s += 3;
+      if (r.id_madre && r.id_madre.trim().toUpperCase() !== 'XXX') s += 3;
+      if (r.propietario_nombre && r.propietario_nombre.trim().toUpperCase() !== 'XXX') s += 2;
+      if (r.numero_registro && !r.numero_registro.includes('*')) s += 1;
+      return s;
+    };
+    return score(b) - score(a);
+  });
+
+  const base = { ...scored[0] };
+  for (const r of scored.slice(1)) {
+    if (!isValidChipValue(base.chip) && isValidChipValue(r.chip)) base.chip = r.chip;
+    if ((!base.id_padre || base.id_padre === 'XXX') && r.id_padre && r.id_padre !== 'XXX') base.id_padre = r.id_padre;
+    if ((!base.id_madre || base.id_madre === 'XXX') && r.id_madre && r.id_madre !== 'XXX') base.id_madre = r.id_madre;
+    if ((!base.propietario_nombre || base.propietario_nombre === 'XXX') && r.propietario_nombre && r.propietario_nombre !== 'XXX') {
+      base.propietario_nombre = r.propietario_nombre;
+    }
+    if (!base.color && r.color) base.color = r.color;
+    if (!base.fecha_nac && r.fecha_nac) base.fecha_nac = r.fecha_nac;
+    if ((!base.fotos || base.fotos.length === 0) && r.fotos && r.fotos.length > 0) base.fotos = r.fotos;
+  }
+  return base;
+}
+
 /**
- * Searches for a dog in real-time in Supabase by registration number, microchip, name, or owner.
- * Supports prefixes (INBR-F110369 -> F110369), formatted microchips (spaces/dashes), and alphanumeric normalization.
- * Checks both 'perros' table and 'specimens' table.
+ * Searches for a dog in real-time in Supabase by registration number, microchip, or name.
+ * Supports prefixes (INBR-F110369 -> F110369), asterisked regs (*PA10000* -> PA10000),
+ * formatted microchips (spaces/dashes), and merges duplicate variants so complete data is returned.
  */
 export async function searchDogInSupabase(query: string): Promise<SupabasePerro | null> {
   const raw = (query || '').trim();
@@ -119,109 +160,166 @@ export async function searchDogInSupabase(query: string): Promise<SupabasePerro 
 
   try {
     const upper = raw.toUpperCase();
+    const withoutStars = upper.replace(/\*/g, '').trim();
     const digitsOnly = raw.replace(/\D/g, '');
-    const alnumOnly = raw.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-    const strippedInbr = raw.replace(/^(INBR|REG|CHIP|ISO)[-_\s:]*/i, '').trim().toUpperCase();
-    const strippedInbrAlnum = strippedInbr.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    const alnumOnly = withoutStars.replace(/[^A-Z0-9]/g, '');
+    const strippedInbr = withoutStars.replace(/^(INBR|REG|CHIP|ISO)[-_\s:]*/i, '').trim();
+    const strippedInbrAlnum = strippedInbr.replace(/[^A-Z0-9]/g, '');
 
-    // 1. Tier 1: Exact matches against registration number or microchip
+    const quoteFilterVal = (val: string) => `"${val.replace(/["\\]/g, '').trim()}"`;
+
+    const normalizeRegCode = (val?: string | null) =>
+      (val || '')
+        .toUpperCase()
+        .replace(/^\*+|\*+$/g, '')
+        .replace(/^(INBR|REG|CHIP|ISO)[-_\s:]*/i, '')
+        .replace(/[^A-Z0-9]/g, '');
+
+    const targetQueryAlnum = strippedInbrAlnum || alnumOnly;
+
+    const isExactMatchRow = (r: SupabasePerro, matchedRegTarget?: string): boolean => {
+      const rRegAlnum = normalizeRegCode(r.numero_registro);
+      const rRawAlnum = (r.numero_registro || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const rChipDigits = (r.chip || '').replace(/\D/g, '');
+      const regTarget = matchedRegTarget || targetQueryAlnum;
+
+      if (regTarget && (rRegAlnum === regTarget || rRawAlnum === regTarget || rRegAlnum === alnumOnly)) {
+        return true;
+      }
+      if (digitsOnly.length >= 6 && rChipDigits === digitsOnly) {
+        return true;
+      }
+      return false;
+    };
+
+    // 1. Tier 1: Fetch ALL matching variants (exact, asterisk-wrapped, INBR-prefixed, and chip) in one query
     const exactCandidates = Array.from(new Set([
       raw,
       upper,
+      withoutStars,
       strippedInbr,
+      strippedInbr ? `*${strippedInbr}*` : '',
+      strippedInbr ? `INBR-${strippedInbr}` : '',
       alnumOnly,
-      digitsOnly,
+      alnumOnly ? `*${alnumOnly}*` : '',
+      digitsOnly.length >= 8 ? digitsOnly : '',
       strippedInbrAlnum,
     ])).filter((val) => Boolean(val && val.length >= 2));
 
-    for (const cand of exactCandidates) {
-      // Check in 'perros' table
+    const collectedMatches: SupabasePerro[] = [];
+    if (exactCandidates.length > 0) {
+      const orClauses = exactCandidates.flatMap((cand) => {
+        const quoted = quoteFilterVal(cand);
+        const op = cand.includes('*') ? 'eq' : 'ilike';
+        return [`numero_registro.${op}.${quoted}`, `chip.${op}.${quoted}`];
+      });
       const { data: exactPerros } = await supabase
         .from('perros')
         .select('*')
-        .or(`numero_registro.eq.${cand},chip.eq.${cand}`)
-        .limit(2);
+        .or(orClauses.join(','))
+        .limit(25);
 
       if (exactPerros && exactPerros.length > 0) {
-        return exactPerros[0] as SupabasePerro;
+        const strictlyMatched = (exactPerros as SupabasePerro[]).filter((r) => isExactMatchRow(r));
+        collectedMatches.push(...strictlyMatched);
       }
     }
 
-    // 2. Tier 2: ilike substring matching on registration, chip, name, owner
-    const searchTerms = Array.from(new Set([
-      raw,
-      upper,
-      strippedInbr,
-      strippedInbrAlnum,
-      digitsOnly,
-    ])).filter((t) => Boolean(t && t.length >= 2));
+    // 1b. Normalized fallback & sibling-variant expansion (e.g. matched via chip -> also pull sibling folio variants)
+    const primaryRegAlnum = collectedMatches[0] ? normalizeRegCode(collectedMatches[0].numero_registro) : '';
+    const targetRegAlnum = primaryRegAlnum || targetQueryAlnum;
 
-    const orClauses: string[] = [];
-    searchTerms.forEach((term) => {
-      // Escape commas to prevent PostgREST syntax errors
-      const safeTerm = term.replace(/,/g, '');
-      orClauses.push(`numero_registro.ilike.%${safeTerm}%`);
-      orClauses.push(`nombre.ilike.%${safeTerm}%`);
-      orClauses.push(`propietario_nombre.ilike.%${safeTerm}%`);
-      if (digitsOnly.length >= 5) {
-        orClauses.push(`chip.ilike.%${digitsOnly}%`);
+    if (
+      targetRegAlnum.length >= 4 &&
+      (collectedMatches.length === 0 || collectedMatches.every((m) => !isValidChipValue(m.chip)))
+    ) {
+      const { data: wildcardRegs } = await supabase
+        .from('perros')
+        .select('*')
+        .ilike('numero_registro', `%${targetRegAlnum}%`)
+        .limit(20);
+
+      if (wildcardRegs && wildcardRegs.length > 0) {
+        const exactNormalizedMatches = (wildcardRegs as SupabasePerro[]).filter((r) =>
+          isExactMatchRow(r, targetRegAlnum)
+        );
+        if (exactNormalizedMatches.length > 0) {
+          collectedMatches.push(...exactNormalizedMatches);
+        }
       }
-      if (term.length >= 3) {
-        orClauses.push(`chip.ilike.%${safeTerm}%`);
+    }
+
+    if (collectedMatches.length > 0) {
+      return mergePerroVariants(collectedMatches);
+    }
+
+    if (digitsOnly.length >= 8) {
+      const { data: wildcardChips } = await supabase
+        .from('perros')
+        .select('*')
+        .ilike('chip', `%${digitsOnly}%`)
+        .limit(10);
+
+      if (wildcardChips && wildcardChips.length > 0) {
+        const exactChipMatches = (wildcardChips as SupabasePerro[]).filter((r) => {
+          const cDigits = (r.chip || '').replace(/\D/g, '');
+          return cDigits === digitsOnly;
+        });
+        if (exactChipMatches.length > 0) {
+          return mergePerroVariants(exactChipMatches);
+        }
       }
-    });
+    }
 
-    // Remove duplicates and limit clause count
-    const uniqueClauses = Array.from(new Set(orClauses)).slice(0, 15);
+    // If the query looks like a registration folio or numeric microchip, DO NOT return an unrelated dog via partial ilike
+    const looksLikeCodeOrChip =
+      /\d/.test(upper) ||
+      /^(INBR|REG|CHIP|ISO|CA|F1)/i.test(withoutStars);
 
-    const { data: ilikeMatches, error: ilikeError } = await supabase
+    if (looksLikeCodeOrChip) {
+      const specTerm = quoteFilterVal(strippedInbr || withoutStars);
+      const { data: specExact } = await supabase
+        .from('specimens')
+        .select('*')
+        .or(`registration_number.ilike.${specTerm},chip.ilike.${specTerm}`)
+        .limit(2);
+
+      if (specExact && specExact.length > 0) {
+        const s = specExact[0];
+        return {
+          numero_registro: s.registration_number || s.id,
+          nombre: s.name,
+          raza: s.breed || 'American Bully',
+          sexo: s.sex || 'MACHO',
+          color: s.color || null,
+          fecha_nac: s.birth_date || null,
+          chip: s.chip || null,
+          id_padre: null,
+          id_madre: null,
+          propietario_nombre: 'Propietario Oficial INBR',
+          estado: 'APROBADO',
+          tipo_registro: 'SPECIMEN',
+        };
+      }
+      return null;
+    }
+
+    // 2. Tier 2 (text-only queries, e.g. searching by dog name): exact or partial match on nombre
+    const safeTerm = withoutStars.replace(/,/g, '');
+    const { data: nameMatches, error: nameError } = await supabase
       .from('perros')
       .select('*')
-      .or(uniqueClauses.join(','))
-      .limit(10);
+      .ilike('nombre', `%${safeTerm}%`)
+      .limit(15);
 
-    if (!ilikeError && ilikeMatches && ilikeMatches.length > 0) {
-      // Prefer exact normalized match if present
-      const preferred = ilikeMatches.find((d: SupabasePerro) => {
-        const dReg = (d.numero_registro || '').toUpperCase().trim();
-        const dChip = (d.chip || '').replace(/\D/g, '');
-        const dName = (d.nombre || '').toUpperCase().trim();
-        return (
-          dReg === upper ||
-          dReg === strippedInbr ||
-          dReg.replace(/[^A-Za-z0-9]/g, '') === alnumOnly ||
-          (digitsOnly.length >= 6 && dChip === digitsOnly) ||
-          dName === upper
-        );
-      });
-      return (preferred || ilikeMatches[0]) as SupabasePerro;
-    }
-
-    // 3. Fallback: check specimens table
-    const specTerms = [raw, upper, strippedInbr, digitsOnly].filter(Boolean);
-    const specClauses = specTerms.map((t) => `registration_number.ilike.%${t}%,name.ilike.%${t}%,chip.ilike.%${t}%`);
-    const { data: specData, error: specError } = await supabase
-      .from('specimens')
-      .select('*')
-      .or(specClauses.join(','))
-      .limit(5);
-
-    if (!specError && specData && specData.length > 0) {
-      const s = specData[0];
-      return {
-        numero_registro: s.registration_number || s.id,
-        nombre: s.name,
-        raza: s.breed || 'American Bully',
-        sexo: s.sex || 'MACHO',
-        color: s.color || null,
-        fecha_nac: s.birth_date || null,
-        chip: s.chip || null,
-        id_padre: 'LINAJE FUNDADOR INBR',
-        id_madre: 'LINAJE FUNDADOR INBR',
-        propietario_nombre: 'Propietario Oficial INBR',
-        estado: 'APROBADO',
-        tipo_registro: 'SPECIMEN',
-      };
+    if (!nameError && nameMatches && nameMatches.length > 0) {
+      const exactNamed = (nameMatches as SupabasePerro[]).filter(
+        (d) => (d.nombre || '').toUpperCase().replace(/\s+/g, ' ').trim() === withoutStars.replace(/\s+/g, ' ').trim()
+      );
+      if (exactNamed.length > 0) {
+        return mergePerroVariants(exactNamed);
+      }
+      return nameMatches[0] as SupabasePerro;
     }
 
     return null;

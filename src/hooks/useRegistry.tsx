@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { SAMPLE_DOGS, BREEDERS_DIRECTORY, DogRecord } from '../data/registryData';
 import { supabase, SupabasePerro, searchDogInSupabase as libSearchDog } from '../lib/supabase';
+import { getBreedImageByIdOrName } from '../utils/breedImages';
 
 export { supabase };
 
@@ -12,6 +13,8 @@ export interface RegistryContextType {
   supabaseTotalCount: number;
   addDogsFromExcel: (newDogs: DogRecord[]) => Promise<{ count: number; supabaseSaved: number }>;
   addBreedersFromExcel: (newBreeders: any[]) => { count: number };
+  updateDogRecord: (regNumber: string, patch: Partial<DogRecord>) => Promise<{ success: boolean; error?: string }>;
+  deleteDogRecord: (regNumber: string) => Promise<{ success: boolean; error?: string }>;
   resetToDefaults: () => void;
   findDogByQuery: (query: string) => DogRecord | undefined;
   searchDogOnlineAndOffline: (query: string) => Promise<DogRecord | undefined>;
@@ -25,22 +28,67 @@ export const RegistryContext = createContext<RegistryContextType | undefined>(un
 const LOCAL_STORAGE_DOGS_KEY = 'inbr_custom_dogs_v2';
 const LOCAL_STORAGE_BREEDERS_KEY = 'inbr_custom_breeders_v2';
 
+import { 
+  createAncestorLookup, 
+  isPlaceholderAncestor, 
+  normalizePedigreeAlnum, 
+  normalizePedigreeText,
+  isCamadaPuppyRecord 
+} from '../utils/pedigreeResolver';
+
+function hasRealMicrochip(chip?: string | null): boolean {
+  if (!chip) return false;
+  const c = chip.trim().toUpperCase();
+  if (!c || c === 'XXX' || c === 'N/A' || c === 'NO' || c === 'NONE' || c === 'SIN CHIP' || c.startsWith('INBR-CHIP-')) {
+    return false;
+  }
+  return c.replace(/\D/g, '').length >= 6;
+}
+
+function mergeDogRecords(a: DogRecord, b: DogRecord): DogRecord {
+  const score = (d: DogRecord) => {
+    let s = 0;
+    if (hasRealMicrochip(d.microchip)) s += 10;
+    if (!isPlaceholderAncestor(d.sire)) s += 4;
+    if (!isPlaceholderAncestor(d.dam)) s += 4;
+    if (d.owner && d.owner !== 'Criadero Oficial INBR') s += 2;
+    if (d.genogram?.sire?.name || d.genogram?.dam?.name) s += 5;
+    if (d.regNumber && !d.regNumber.includes('*')) s += 1;
+    return s;
+  };
+  const [primary, secondary] = score(b) > score(a) ? [b, a] : [a, b];
+  return {
+    ...primary,
+    microchip: hasRealMicrochip(primary.microchip) ? primary.microchip : secondary.microchip,
+    sire: !isPlaceholderAncestor(primary.sire) ? primary.sire : secondary.sire,
+    sireReg: !isPlaceholderAncestor(primary.sireReg) ? primary.sireReg : secondary.sireReg,
+    dam: !isPlaceholderAncestor(primary.dam) ? primary.dam : secondary.dam,
+    damReg: !isPlaceholderAncestor(primary.damReg) ? primary.damReg : secondary.damReg,
+    owner: primary.owner && primary.owner !== 'Criadero Oficial INBR' ? primary.owner : secondary.owner,
+    breeder: primary.breeder && primary.breeder !== 'Criadero Oficial INBR' ? primary.breeder : secondary.breeder,
+    color: primary.color && primary.color !== 'Estándar Oficial' ? primary.color : secondary.color,
+    genogram: primary.genogram || secondary.genogram,
+  };
+}
+
 // Helper to convert a Supabase 'perros' row into the application's DogRecord format
 export function mapSupabaseToDogRecord(p: SupabasePerro): DogRecord {
   const isFemale = p.sexo?.toUpperCase().includes('HEMBRA') || p.sexo?.toUpperCase() === 'F';
-  const photo = Array.isArray(p.fotos) && p.fotos.length > 0 
+  const photo = Array.isArray(p.fotos) && p.fotos.length > 0 && p.fotos[0]
     ? p.fotos[0] 
-    : 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=600&q=80';
+    : getBreedImageByIdOrName(p.raza || '');
 
-  const sireName = p.id_padre && p.id_padre !== 'XXX' ? p.id_padre.trim() : 'LINAJE FUNDADOR INBR';
-  const damName = p.id_madre && p.id_madre !== 'XXX' ? p.id_madre.trim() : 'LINAJE FUNDADOR INBR';
+  const rawSire = (p.id_padre || '').replace(/\s+/g, ' ').trim();
+  const rawDam = (p.id_madre || '').replace(/\s+/g, ' ').trim();
+  const sireName = !isPlaceholderAncestor(rawSire) ? rawSire : 'SIN REGISTRO';
+  const damName = !isPlaceholderAncestor(rawDam) ? rawDam : 'SIN REGISTRO';
 
-  const regTrimmed = (p.numero_registro || '').trim();
-  const isCamada = regTrimmed.toUpperCase().startsWith('CA') || 
+  const regTrimmed = (p.numero_registro || '').replace(/\*/g, '').replace(/\s+/g, ' ').trim();
+  const isCamada = /^CA\d/i.test(regTrimmed) || 
                   (p.tipo_registro && p.tipo_registro.toUpperCase().includes('CAMADA'));
 
   // Relational distinction: Resolving conflict where puppy was erroneously named after sire
-  let resolvedName = (p.nombre || 'EJEMPLAR INBR').trim();
+  let resolvedName = (p.nombre || 'EJEMPLAR INBR').replace(/\s+/g, ' ').trim();
   if (
     isCamada &&
     (resolvedName.toUpperCase() === sireName.toUpperCase() ||
@@ -49,14 +97,19 @@ export function mapSupabaseToDogRecord(p: SupabasePerro): DogRecord {
      resolvedName.toUpperCase() === 'EJEMPLAR INBR')
   ) {
     resolvedName = `CACHORRO ${regTrimmed}`;
-  } else if (resolvedName.toUpperCase() === sireName.toUpperCase() && sireName !== 'LINAJE FUNDADOR INBR') {
+  } else if (
+    isCamada &&
+    resolvedName.toUpperCase() === sireName.toUpperCase() &&
+    sireName !== 'SIN REGISTRO'
+  ) {
     resolvedName = `CACHORRO ${regTrimmed}`;
   }
 
-  // Owner distinction: The owner is NEVER the father or mother dog (e.g. Panic is the sire, not the owner)
-  let resolvedOwner = (p.propietario_nombre || '').trim();
+  // Owner distinction: The owner is NEVER the father or mother dog
+  let resolvedOwner = (p.propietario_nombre || '').replace(/\s+/g, ' ').trim();
   if (
     !resolvedOwner ||
+    resolvedOwner.toUpperCase() === 'XXX' ||
     resolvedOwner.toUpperCase() === sireName.toUpperCase() ||
     resolvedOwner.toUpperCase() === damName.toUpperCase() ||
     resolvedOwner.toUpperCase() === 'CRIADOR AFILIADO INBR'
@@ -64,24 +117,27 @@ export function mapSupabaseToDogRecord(p: SupabasePerro): DogRecord {
     resolvedOwner = 'Criadero Oficial INBR';
   }
 
-  // Progenitor registrations (clean, never matching the puppy's registration)
-  const cleanSireReg = sireName !== 'LINAJE FUNDADOR INBR'
-    ? `REG-${sireName.replace(/[^A-Za-z0-9]/g, '').toUpperCase()}`
-    : 'INBR-FOUNDER-01';
+  const looksLikeRegFolio = (val: string) => /^[A-Z]{1,4}[-_\s]?\d{3,}/i.test(val.replace(/\*/g, '').trim());
+  const cleanSireReg = sireName !== 'SIN REGISTRO' && looksLikeRegFolio(sireName)
+    ? sireName.replace(/\*/g, '').trim().toUpperCase()
+    : '—';
+  const cleanDamReg = damName !== 'SIN REGISTRO' && looksLikeRegFolio(damName)
+    ? damName.replace(/\*/g, '').trim().toUpperCase()
+    : '—';
 
-  const cleanDamReg = damName !== 'LINAJE FUNDADOR INBR'
-    ? `REG-${damName.replace(/[^A-Za-z0-9]/g, '').toUpperCase()}`
-    : 'INBR-FOUNDER-02';
+  const cleanChip = hasRealMicrochip(p.chip)
+    ? p.chip!.trim()
+    : `INBR-CHIP-${regTrimmed || '0000'}`;
 
   return {
     regNumber: regTrimmed,
-    microchip: p.chip || `INBR-CHIP-${regTrimmed || '0000'}`,
+    microchip: cleanChip,
     name: resolvedName,
     breed: p.raza || 'American Bully',
     variety: isCamada ? 'Camada Registrada' : 'Standard',
     gender: isFemale ? 'Hembra' : 'Macho',
     dob: p.fecha_nac || (isCamada ? '2024-01-01' : '2023-01-01'),
-    color: p.color || 'Estándar Oficial',
+    color: p.color && p.color.toUpperCase() !== 'XXX' ? p.color : 'Estándar Oficial',
     owner: resolvedOwner,
     breeder: resolvedOwner || 'Criadero Registrado INBR',
     country: 'México',
@@ -102,31 +158,28 @@ export function mapSupabaseToDogRecord(p: SupabasePerro): DogRecord {
 export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isLoadingSupabase, setIsLoadingSupabase] = useState<boolean>(true);
   const [supabaseConnected, setSupabaseConnected] = useState<boolean>(true);
-  const [supabaseTotalCount, setSupabaseTotalCount] = useState<number>(2524);
+  const [supabaseTotalCount, setSupabaseTotalCount] = useState<number>(2528);
   
   const [dogs, setDogs] = useState<DogRecord[]>(() => {
     const map = new Map<string, DogRecord>();
-    // Always include canonical SAMPLE_DOGS (including BAM BAM and official champions)
-    SAMPLE_DOGS.forEach((d) => {
-      if (d && d.regNumber) {
-        map.set(d.regNumber.toUpperCase().trim(), d);
-      }
-    });
+    const upsertIntoMap = (d: DogRecord) => {
+      if (!d || !d.regNumber) return;
+      const key = normalizePedigreeAlnum(d.regNumber) || d.regNumber.toUpperCase().trim();
+      const existing = map.get(key);
+      map.set(key, existing ? mergeDogRecords(existing, d) : d);
+    };
+
+    SAMPLE_DOGS.forEach(upsertIntoMap);
 
     if (typeof window !== 'undefined') {
       try {
-        // Recover cached authoritative dogs from localStorage
         ['inbr_custom_dogs_v2', 'inbr_custom_dogs', 'inbr_excel_dogs', 'inbr_dogs'].forEach((k) => {
           const saved = localStorage.getItem(k);
           if (saved) {
             try {
               const parsed = JSON.parse(saved);
               if (Array.isArray(parsed) && parsed.length > 0) {
-                parsed.forEach((d: DogRecord) => {
-                  if (d && d.regNumber) {
-                    map.set(d.regNumber.toUpperCase().trim(), d);
-                  }
-                });
+                parsed.forEach(upsertIntoMap);
               }
             } catch {}
           }
@@ -155,7 +208,7 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return BREEDERS_DIRECTORY;
   });
 
-  // Fetch real dogs from Supabase database with pagination (all 2,524+ records)
+  // Fetch all real dogs from Supabase database with deterministic pagination (all 2,528+ records)
   const refreshFromSupabase = useCallback(async () => {
     setIsLoadingSupabase(true);
     try {
@@ -170,6 +223,7 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           .from('perros')
           .select('*')
           .order('created_at', { ascending: false })
+          .order('numero_registro', { ascending: true })
           .range(from, to);
 
         if (error) {
@@ -195,10 +249,15 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         setDogs(() => {
           const map = new Map<string, DogRecord>();
-          // Canonical official champions and baseline records
-          SAMPLE_DOGS.forEach((d) => map.set(d.regNumber.toUpperCase().trim(), d));
-          // Authoritative Supabase records
-          mappedRecords.forEach((d) => map.set(d.regNumber.toUpperCase().trim(), d));
+          const upsertIntoMap = (d: DogRecord) => {
+            if (!d || !d.regNumber) return;
+            const key = normalizePedigreeAlnum(d.regNumber) || d.regNumber.toUpperCase().trim();
+            const existing = map.get(key);
+            map.set(key, existing ? mergeDogRecords(existing, d) : d);
+          };
+
+          SAMPLE_DOGS.forEach(upsertIntoMap);
+          mappedRecords.forEach(upsertIntoMap);
 
           const merged = Array.from(map.values());
           if (typeof window !== 'undefined') {
@@ -221,7 +280,6 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     refreshFromSupabase();
 
-    // Listen to real-time changes on 'perros' table to keep local registry in sync
     const registryChannel = supabase
       .channel('public_perros_sync')
       .on(
@@ -232,8 +290,13 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             const mapped = mapSupabaseToDogRecord(payload.new as SupabasePerro);
             setDogs((prevDogs) => {
               const map = new Map<string, DogRecord>();
-              prevDogs.forEach((d) => map.set(d.regNumber.toUpperCase().trim(), d));
-              map.set(mapped.regNumber.toUpperCase().trim(), mapped);
+              const upsertIntoMap = (d: DogRecord) => {
+                const key = normalizePedigreeAlnum(d.regNumber) || d.regNumber.toUpperCase().trim();
+                const existing = map.get(key);
+                map.set(key, existing ? mergeDogRecords(existing, d) : d);
+              };
+              prevDogs.forEach(upsertIntoMap);
+              upsertIntoMap(mapped);
               return Array.from(map.values());
             });
           }
@@ -265,12 +328,13 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const addDogsFromExcel = async (newDogs: DogRecord[]) => {
     const map = new Map<string, DogRecord>();
-    dogs.forEach((d) => map.set(d.regNumber.toUpperCase().trim(), d));
+    dogs.forEach((d) => map.set(normalizePedigreeAlnum(d.regNumber) || d.regNumber.toUpperCase().trim(), d));
     
     let addedCount = 0;
     newDogs.forEach((d) => {
       if (d.regNumber) {
-        map.set(d.regNumber.toUpperCase().trim(), d);
+        const key = normalizePedigreeAlnum(d.regNumber) || d.regNumber.toUpperCase().trim();
+        map.set(key, d);
         addedCount++;
       }
     });
@@ -278,9 +342,8 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const merged = Array.from(map.values());
     setDogs(merged);
 
-    // Sync to Supabase 'perros' table in batches of 100
     const recordsToInsert = newDogs.map((d) => ({
-      numero_registro: d.regNumber.trim().toUpperCase(),
+      numero_registro: d.regNumber.replace(/\*/g, '').trim().toUpperCase(),
       nombre: d.name.trim().toUpperCase(),
       raza: d.breed,
       sexo: d.gender === 'Hembra' ? 'HEMBRA' : 'MACHO',
@@ -322,6 +385,73 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return { count: newBreeders.length };
   };
 
+  const updateDogRecord = async (
+    regNumber: string,
+    patch: Partial<DogRecord>
+  ): Promise<{ success: boolean; error?: string }> => {
+    const targetReg = regNumber.replace(/\*/g, '').trim().toUpperCase();
+    const targetAlnum = normalizePedigreeAlnum(targetReg);
+
+    setDogs((prev) =>
+      prev.map((d) => {
+        if (normalizePedigreeAlnum(d.regNumber) === targetAlnum || d.regNumber.trim().toUpperCase() === targetReg) {
+          return { ...d, ...patch };
+        }
+        return d;
+      })
+    );
+
+    try {
+      const dbPatch: Record<string, any> = {};
+      if (patch.name !== undefined) dbPatch.nombre = patch.name.trim().toUpperCase();
+      if (patch.breed !== undefined) dbPatch.raza = patch.breed.trim();
+      if (patch.gender !== undefined) dbPatch.sexo = patch.gender === 'Hembra' ? 'HEMBRA' : 'MACHO';
+      if (patch.color !== undefined) dbPatch.color = patch.color.trim();
+      if (patch.microchip !== undefined) dbPatch.chip = patch.microchip.trim() || null;
+      if (patch.owner !== undefined) dbPatch.propietario_nombre = patch.owner.trim() || null;
+      if (patch.sire !== undefined) dbPatch.id_padre = patch.sire.trim() || null;
+      if (patch.dam !== undefined) dbPatch.id_madre = patch.dam.trim() || null;
+      if (patch.dob !== undefined) dbPatch.fecha_nac = patch.dob.trim() || null;
+      if (patch.imageUrl !== undefined && patch.imageUrl) dbPatch.fotos = [patch.imageUrl];
+
+      const { error } = await supabase
+        .from('perros')
+        .update(dbPatch)
+        .in('numero_registro', [targetReg, `*${targetReg}*`]);
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Error al actualizar en Supabase' };
+    }
+  };
+
+  const deleteDogRecord = async (
+    regNumber: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    const targetReg = regNumber.replace(/\*/g, '').trim().toUpperCase();
+    const targetAlnum = normalizePedigreeAlnum(targetReg);
+
+    try {
+      const { error } = await supabase
+        .from('perros')
+        .delete()
+        .in('numero_registro', [targetReg, `*${targetReg}*`]);
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      setDogs((prev) => prev.filter((d) => normalizePedigreeAlnum(d.regNumber) !== targetAlnum));
+      setSupabaseTotalCount((prev) => Math.max(0, prev - 1));
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Error al eliminar en Supabase' };
+    }
+  };
+
   const resetToDefaults = () => {
     setDogs(SAMPLE_DOGS);
     setBreeders(BREEDERS_DIRECTORY);
@@ -334,52 +464,96 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const crossReferenceDog = (dog: DogRecord): DogRecord => {
     if (!dog) return dog;
-    
-    // Check if sire exists in database to pull real titles, color, and registration
-    // CRITICAL: A dog cannot be its own sire, and a Camada puppy cannot be the sire of another puppy!
-    const sireObj = dogs.find(
-      (d) => 
-        d.regNumber !== dog.regNumber &&
-        (
-          (dog.sireReg && d.regNumber.toUpperCase().trim() === dog.sireReg.toUpperCase().trim()) ||
-          (dog.sire && d.name.toUpperCase().trim() === dog.sire.toUpperCase().trim() && !d.regNumber.toUpperCase().startsWith('CA') && !d.name.toUpperCase().startsWith('CACHORRO'))
-        )
-    );
 
-    // Check if dam exists in database
-    const damObj = dogs.find(
-      (d) => 
-        d.regNumber !== dog.regNumber &&
-        (
-          (dog.damReg && d.regNumber.toUpperCase().trim() === dog.damReg.toUpperCase().trim()) ||
-          (dog.dam && d.name.toUpperCase().trim() === dog.dam.toUpperCase().trim() && !d.regNumber.toUpperCase().startsWith('CA') && !d.name.toUpperCase().startsWith('CACHORRO'))
-        )
-    );
+    const { findAncestor } = createAncestorLookup(dogs);
+    const rootVisited = new Set<string>();
+    const rootReg = normalizePedigreeAlnum(dog.regNumber);
+    if (rootReg) rootVisited.add(rootReg);
 
-    const safeSireReg = sireObj?.regNumber || (dog.sireReg && !dog.sireReg.toUpperCase().startsWith('CA') && dog.sireReg !== dog.regNumber ? dog.sireReg : (dog.sire ? `REG-${dog.sire.replace(/[^A-Za-z0-9]/g, '').toUpperCase()}` : 'INBR-777-01'));
-    const safeDamReg = damObj?.regNumber || (dog.damReg && !dog.damReg.toUpperCase().startsWith('CA') && dog.damReg !== dog.regNumber ? dog.damReg : (dog.dam ? `REG-${dog.dam.replace(/[^A-Za-z0-9]/g, '').toUpperCase()}` : 'INBR-777-02'));
+    const sireObj = findAncestor(dog.sireReg, dog, rootVisited) || findAncestor(dog.sire, dog, rootVisited);
+    const damObj = findAncestor(dog.damReg, dog, rootVisited) || findAncestor(dog.dam, dog, rootVisited);
+
+    const sireVisited = new Set(rootVisited);
+    if (sireObj?.regNumber) sireVisited.add(normalizePedigreeAlnum(sireObj.regNumber));
+    const damVisited = new Set(rootVisited);
+    if (damObj?.regNumber) damVisited.add(normalizePedigreeAlnum(damObj.regNumber));
+
+    const ssObj = sireObj ? (findAncestor(sireObj.sireReg, sireObj, sireVisited) || findAncestor(sireObj.sire, sireObj, sireVisited)) : undefined;
+    const sdObj = sireObj ? (findAncestor(sireObj.damReg, sireObj, sireVisited) || findAncestor(sireObj.dam, sireObj, sireVisited)) : undefined;
+    const dsObj = damObj ? (findAncestor(damObj.sireReg, damObj, damVisited) || findAncestor(damObj.sire, damObj, damVisited)) : undefined;
+    const ddObj = damObj ? (findAncestor(damObj.damReg, damObj, damVisited) || findAncestor(damObj.dam, damObj, damVisited)) : undefined;
+
+    const existingG = dog.genogram;
+
+    const safeSireReg =
+      sireObj?.regNumber ||
+      (!isPlaceholderAncestor(dog.sireReg) && normalizePedigreeAlnum(dog.sireReg) !== rootReg ? dog.sireReg! : '') ||
+      existingG?.sire?.reg ||
+      '—';
+
+    const safeDamReg =
+      damObj?.regNumber ||
+      (!isPlaceholderAncestor(dog.damReg) && normalizePedigreeAlnum(dog.damReg) !== rootReg ? dog.damReg! : '') ||
+      existingG?.dam?.reg ||
+      '—';
+
+    const sireName =
+      (!isPlaceholderAncestor(dog.sire) ? dog.sire : '') ||
+      sireObj?.name ||
+      existingG?.sire?.name ||
+      'SIN REGISTRO';
+
+    const damName =
+      (!isPlaceholderAncestor(dog.dam) ? dog.dam : '') ||
+      damObj?.name ||
+      existingG?.dam?.name ||
+      'SIN REGISTRO';
 
     const enrichedSire = {
-      name: dog.sire || sireObj?.name || '777 CORSAN FIREUP',
+      name: sireName,
       reg: safeSireReg,
-      titles: sireObj?.titles || ['CH'],
-      sire: { name: sireObj?.sire || '777 CORSAN FIREUP', reg: sireObj?.sireReg || 'INBR-777-01', titles: ['GR CH'], sire: 'INBR PATERNAL FOUNDER', dam: 'INBR PATERNAL DAM' },
-      dam: { name: sireObj?.dam || 'YEYI 777', reg: sireObj?.damReg || 'INBR-777-02', titles: ['CH'], sire: 'INBR MATERNAL FOUNDER', dam: 'INBR MATERNAL DAM' },
+      titles: sireObj?.titles || existingG?.sire?.titles || [],
+      sire: {
+        name: ssObj?.name || (!isPlaceholderAncestor(sireObj?.sire) ? sireObj!.sire! : '') || existingG?.sire?.sire?.name || 'SIN REGISTRO',
+        reg: ssObj?.regNumber || (!isPlaceholderAncestor(sireObj?.sireReg) ? sireObj!.sireReg! : '') || existingG?.sire?.sire?.reg || '—',
+        titles: ssObj?.titles || existingG?.sire?.sire?.titles || [],
+        sire: (!isPlaceholderAncestor(ssObj?.sire) ? ssObj!.sire! : '') || existingG?.sire?.sire?.sire || 'SIN REGISTRO',
+        dam: (!isPlaceholderAncestor(ssObj?.dam) ? ssObj!.dam! : '') || existingG?.sire?.sire?.dam || 'SIN REGISTRO',
+      },
+      dam: {
+        name: sdObj?.name || (!isPlaceholderAncestor(sireObj?.dam) ? sireObj!.dam! : '') || existingG?.sire?.dam?.name || 'SIN REGISTRO',
+        reg: sdObj?.regNumber || (!isPlaceholderAncestor(sireObj?.damReg) ? sireObj!.damReg! : '') || existingG?.sire?.dam?.reg || '—',
+        titles: sdObj?.titles || existingG?.sire?.dam?.titles || [],
+        sire: (!isPlaceholderAncestor(sdObj?.sire) ? sdObj!.sire! : '') || existingG?.sire?.dam?.sire || 'SIN REGISTRO',
+        dam: (!isPlaceholderAncestor(sdObj?.dam) ? sdObj!.dam! : '') || existingG?.sire?.dam?.dam || 'SIN REGISTRO',
+      },
     };
 
     const enrichedDam = {
-      name: dog.dam || damObj?.name || 'YEYI 777',
+      name: damName,
       reg: safeDamReg,
-      titles: damObj?.titles || ['CH'],
-      sire: { name: damObj?.sire || 'DIESEL BULL', reg: damObj?.sireReg || 'INBR-84920', titles: ['CH'], sire: 'INBR DAM SIRE', dam: 'INBR DAM DAM' },
-      dam: { name: damObj?.dam || 'BELLA SUPREME', reg: damObj?.damReg || 'INBR-00192', titles: ['CH'], sire: 'INBR DAM SIRE 2', dam: 'INBR DAM DAM 2' },
+      titles: damObj?.titles || existingG?.dam?.titles || [],
+      sire: {
+        name: dsObj?.name || (!isPlaceholderAncestor(damObj?.sire) ? damObj!.sire! : '') || existingG?.dam?.sire?.name || 'SIN REGISTRO',
+        reg: dsObj?.regNumber || (!isPlaceholderAncestor(damObj?.sireReg) ? damObj!.sireReg! : '') || existingG?.dam?.sire?.reg || '—',
+        titles: dsObj?.titles || existingG?.dam?.sire?.titles || [],
+        sire: (!isPlaceholderAncestor(dsObj?.sire) ? dsObj!.sire! : '') || existingG?.dam?.sire?.sire || 'SIN REGISTRO',
+        dam: (!isPlaceholderAncestor(dsObj?.dam) ? dsObj!.dam! : '') || existingG?.dam?.sire?.dam || 'SIN REGISTRO',
+      },
+      dam: {
+        name: ddObj?.name || (!isPlaceholderAncestor(damObj?.dam) ? damObj!.dam! : '') || existingG?.dam?.dam?.name || 'SIN REGISTRO',
+        reg: ddObj?.regNumber || (!isPlaceholderAncestor(damObj?.damReg) ? damObj!.damReg! : '') || existingG?.dam?.dam?.reg || '—',
+        titles: ddObj?.titles || existingG?.dam?.dam?.titles || [],
+        sire: (!isPlaceholderAncestor(ddObj?.sire) ? ddObj!.sire! : '') || existingG?.dam?.dam?.sire || 'SIN REGISTRO',
+        dam: (!isPlaceholderAncestor(ddObj?.dam) ? ddObj!.dam! : '') || existingG?.dam?.dam?.dam || 'SIN REGISTRO',
+      },
     };
 
     return {
       ...dog,
-      sire: sireObj?.name || dog.sire,
+      sire: sireName,
       sireReg: safeSireReg,
-      dam: damObj?.name || dog.dam,
+      dam: damName,
       damReg: safeDamReg,
       genogram: {
         sire: enrichedSire,
@@ -389,94 +563,77 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const findDogByQuery = (query: string): DogRecord | undefined => {
-    const raw = (query || '').trim().toUpperCase();
+    const raw = (query || '').replace(/\*/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
     if (!raw) return undefined;
     const cleanAlnum = raw.replace(/[^A-Z0-9]/g, '');
     const digitsOnly = raw.replace(/\D/g, '');
     const strippedInbr = raw.replace(/^(INBR|REG|CHIP|ISO)[-_\s:]*/i, '').trim();
     const strippedInbrAlnum = strippedInbr.replace(/[^A-Z0-9]/g, '');
 
-    // 1. Exact or normalized registration match (Prioritizes the unique identifier of the dog/puppy)
-    const exactReg = dogs.find((d) => {
-      const reg = (d.regNumber || '').toUpperCase().trim();
+    // 1. Strict exact registration match (supports *PA10000*, INBR- prefix, & hyphen/space normalization)
+    const regMatches = dogs.filter((d) => {
+      const reg = (d.regNumber || '').replace(/\*/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+      if (!reg) return false;
+      const regStripped = reg.replace(/^(INBR|REG)[-_\s:]*/i, '').trim();
       const regAlnum = reg.replace(/[^A-Z0-9]/g, '');
+      const regStrippedAlnum = regStripped.replace(/[^A-Z0-9]/g, '');
       return (
         reg === raw ||
         reg === strippedInbr ||
-        regAlnum === cleanAlnum ||
-        regAlnum === strippedInbrAlnum ||
-        (strippedInbr.length >= 3 && reg.endsWith(strippedInbr))
+        regStripped === strippedInbr ||
+        (cleanAlnum.length >= 4 && regAlnum === cleanAlnum) ||
+        (strippedInbrAlnum.length >= 4 && regStrippedAlnum === strippedInbrAlnum)
       );
     });
-    if (exactReg) return crossReferenceDog(exactReg);
-
-    // 2. Microchip match (exact, cleaned digits, or substring)
-    if (digitsOnly.length >= 5) {
-      const chipMatch = dogs.find((d) => {
-        const dChipDigits = (d.microchip || '').replace(/\D/g, '');
-        return dChipDigits === digitsOnly || (dChipDigits.length >= 8 && dChipDigits.includes(digitsOnly));
-      });
-      if (chipMatch) return crossReferenceDog(chipMatch);
+    if (regMatches.length > 0) {
+      const best = regMatches.reduce((acc, cur) => mergeDogRecords(acc, cur));
+      return crossReferenceDog(best);
     }
 
-    // 3. Progenitor Name match (e.g. searching "PANIC")
-    // Prioritize adult / progenitor records so searching "PANIC" returns the father dog
+    // 2. Exact microchip match (exact string or exact 8+ digit match)
+    const chipMatches = dogs.filter((d) => {
+      if (!hasRealMicrochip(d.microchip)) return false;
+      const dChipRaw = (d.microchip || '').toUpperCase().trim();
+      const dChipDigits = dChipRaw.replace(/\D/g, '');
+      if (dChipRaw === raw || dChipRaw === strippedInbr) return true;
+      if (digitsOnly.length >= 8 && dChipDigits === digitsOnly) return true;
+      return false;
+    });
+    if (chipMatches.length > 0) {
+      const best = chipMatches.reduce((acc, cur) => mergeDogRecords(acc, cur));
+      return crossReferenceDog(best);
+    }
+
+    // If query looks like a registration folio or numeric microchip, do NOT guess by name
+    const looksLikeCodeOrChip =
+      /\d/.test(raw) ||
+      /^(INBR|REG|CHIP|ISO|CA|F1)/i.test(raw);
+    if (looksLikeCodeOrChip) {
+      return undefined;
+    }
+
+    // 3. Exact Adult Name match
     const exactNameAdult = dogs.find((d) => {
-      const name = (d.name || '').toUpperCase().trim();
-      const isAdultOrProg = !d.regNumber.toUpperCase().startsWith('CA') && !name.startsWith('CACHORRO');
-      return isAdultOrProg && (name === raw || name === strippedInbr);
+      const name = normalizePedigreeText(d.name);
+      return !isCamadaPuppyRecord(d) && (name === raw || name === strippedInbr);
     });
     if (exactNameAdult) return crossReferenceDog(exactNameAdult);
 
     // 4. Any exact name match
     const exactName = dogs.find((d) => {
-      const name = (d.name || '').toUpperCase().trim();
+      const name = normalizePedigreeText(d.name);
       return name === raw || name === strippedInbr;
     });
     if (exactName) return crossReferenceDog(exactName);
 
-    // 5. Check if query matches a Sire (id_padre) name in litters (e.g. searching "PANIC")
-    const sireOfCamada = dogs.find((d) => {
-      const sire = (d.sire || '').toUpperCase().trim();
-      return sire === raw || sire === strippedInbr;
-    });
-    if (sireOfCamada && sireOfCamada.sire) {
-      const progDog: DogRecord = {
-        regNumber: sireOfCamada.sireReg || `REG-${sireOfCamada.sire.replace(/[^A-Za-z0-9]/g, '').toUpperCase()}`,
-        microchip: `INBR-SIRE-${sireOfCamada.sire.slice(0, 6)}`,
-        name: sireOfCamada.sire,
-        breed: sireOfCamada.breed || 'American Bully',
-        variety: 'Progenitor Semental Oficial',
-        gender: 'Macho',
-        dob: '2021-05-10',
-        color: 'Chocolate / Estándar',
-        owner: 'Criadero Registrado INBR',
-        breeder: 'Criadero Registrado INBR',
-        country: 'México',
-        sire: 'LINAJE FUNDADOR INBR',
-        sireReg: 'INBR-FOUNDER-01',
-        dam: 'LINAJE FUNDADOR INBR',
-        damReg: 'INBR-FOUNDER-02',
-        points: 500,
-        titles: ['PADRE REPRODUCTOR INBR', 'CHAMPION PROGENITOR'],
-        imageUrl: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=800&q=80',
-        status: 'ACTIVE_VALIDATED' as any,
-      };
-      return crossReferenceDog(progDog);
+    // 5. Partial match ONLY on dog name for text-only searches >= 4 characters
+    if (raw.length >= 4) {
+      const nameMatch = dogs.find((d) => {
+        const name = normalizePedigreeText(d.name);
+        return !isCamadaPuppyRecord(d) && name.includes(raw);
+      });
+      if (nameMatch) return crossReferenceDog(nameMatch);
     }
-
-    // 6. Substring on regNumber, microchip, name, or owner
-    const subMatch = dogs.find((d) => {
-      const reg = (d.regNumber || '').toUpperCase().trim();
-      const name = (d.name || '').toUpperCase().trim();
-      const owner = (d.owner || '').toUpperCase().trim();
-      const chip = (d.microchip || '').toUpperCase().trim();
-      return (
-        (strippedInbr.length >= 3 && reg.includes(strippedInbr)) ||
-        (raw.length >= 3 && (name.includes(raw) || owner.includes(raw) || chip.includes(raw)))
-      );
-    });
-    if (subMatch) return crossReferenceDog(subMatch);
 
     return undefined;
   };
@@ -493,8 +650,13 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const mapped = mapSupabaseToDogRecord(livePerro);
         setDogs((prev) => {
           const map = new Map<string, DogRecord>();
-          prev.forEach((d) => map.set(d.regNumber.toUpperCase().trim(), d));
-          map.set(mapped.regNumber.toUpperCase().trim(), mapped);
+          const upsertIntoMap = (d: DogRecord) => {
+            const key = normalizePedigreeAlnum(d.regNumber) || d.regNumber.toUpperCase().trim();
+            const existing = map.get(key);
+            map.set(key, existing ? mergeDogRecords(existing, d) : d);
+          };
+          prev.forEach(upsertIntoMap);
+          upsertIntoMap(mapped);
           const updated = Array.from(map.values());
           if (typeof window !== 'undefined') {
             try {
@@ -525,6 +687,8 @@ export const RegistryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         supabaseTotalCount,
         addDogsFromExcel,
         addBreedersFromExcel,
+        updateDogRecord,
+        deleteDogRecord,
         resetToDefaults,
         findDogByQuery,
         searchDogOnlineAndOffline,

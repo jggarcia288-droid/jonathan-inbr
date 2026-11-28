@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from '../context/LanguageContext';
 import { useDynamicContent } from '../utils/dynamicContent';
+import { BREED_IMAGES } from '../utils/breedImages';
 import { Crown, Sparkles, UploadCloud, ShieldAlert, Award, Camera, Image as ImageIcon } from 'lucide-react';
 
 interface SpecialDog {
@@ -19,8 +20,8 @@ export const SpecialEditionSection: React.FC = () => {
   const { t } = useTranslation();
   const { content } = useDynamicContent();
 
-  const specialBanner1 = content.specialEditionBanner1 || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=1400&q=80';
-  const specialBanner2 = content.specialEditionBanner2 || 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=1400&q=80';
+  const specialBanner1 = content.specialEditionBanner1 || BREED_IMAGES.nanoBull;
+  const specialBanner2 = content.specialEditionBanner2 || BREED_IMAGES.exoticBull;
 
   const participatingDogs = (content.specialEditionList && content.specialEditionList.length > 0)
     ? content.specialEditionList
@@ -28,34 +29,34 @@ export const SpecialEditionSection: React.FC = () => {
         {
           id: 'sp-1',
           name: 'PHENOM NANO BULLET',
-          category: 'Nano Bully (<11 in)',
+          category: 'Nano Bull (<11 in)',
           regNumber: 'INBR-SP-001',
           owner: 'Jonathan Garcia',
           kennel: 'Imperial Bullyz International',
           height: '10.5 pulgadas',
-          imageUrl: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=600&q=80',
+          imageUrl: BREED_IMAGES.nanoBull,
           status: 'AUTORIZADO OFICIAL',
         },
         {
           id: 'sp-2',
-          name: 'CLEAN DIAMOND GHOST',
-          category: 'Clean Exotic',
+          name: 'EXOTIC DIAMOND GHOST',
+          category: 'Exotic Bull',
           regNumber: 'INBR-SP-002',
           owner: 'Carlos Otero',
           kennel: 'Lone Star Bullies',
           height: '12.0 pulgadas',
-          imageUrl: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=600&q=80',
+          imageUrl: BREED_IMAGES.exoticBull,
           status: 'AUTORIZADO OFICIAL',
         },
         {
           id: 'sp-3',
-          name: 'EXTREME POCKET TITAN',
-          category: 'Extreme Pocket',
+          name: 'MICRO BULLY TITAN',
+          category: 'Micro Bully',
           regNumber: 'INBR-SP-003',
           owner: 'Criadero Titan Oficial',
           kennel: 'Titan Bullyz Oficial',
-          height: '14.2 pulgadas',
-          imageUrl: 'https://images.unsplash.com/photo-1517849845537-4d257902454a?auto=format&fit=crop&w=600&q=80',
+          height: '13.5 pulgadas',
+          imageUrl: BREED_IMAGES.americanBully,
           status: 'AUTORIZADO OFICIAL',
         },
       ];
@@ -71,31 +72,31 @@ export const SpecialEditionSection: React.FC = () => {
       bgGlow: 'from-amber-950/20 to-[#12110D]',
     },
     {
-      title: 'Clean Exotic',
-      desc: 'Línea exótica refinada sin papada excesiva, ojos limpios y biomecánica funcional comprobada.',
-      height: '11 - 13 pulgadas',
-      bone: 'Cero Exceso Dérmico',
-      tag: 'CLEAN PROTOCOL',
-      accent: 'border-[#D4AF37]/50',
-      bgGlow: 'from-[#241A0E]/40 to-[#12110D]',
-    },
-    {
-      title: 'Extreme Pocket',
-      desc: 'Masa muscular extrema en alzada de pocket, costillar en barril y tren posterior sobresaliente.',
-      height: '14 - 16 pulgadas',
-      bone: 'Caja Torácica en Barril',
-      tag: 'MASSIVE FRAME',
-      accent: 'border-yellow-600/40',
-      bgGlow: 'from-yellow-950/20 to-[#12110D]',
-    },
-    {
-      title: 'Nano Bully',
-      desc: 'Dimensión diminuta extrema garantizando movilidad armónica y ausencia de defectos vertebrales.',
+      title: 'Nano Bull',
+      desc: 'Dimensión diminuta extrema garantizando movilidad armónica, vías respiratorias limpias y ausencia de defectos vertebrales.',
       height: '< 11 pulgadas',
       bone: 'Talla Mínima Certificada',
       tag: 'ULTRA RARE',
       accent: 'border-amber-400/50',
       bgGlow: 'from-amber-900/30 to-[#12110D]',
+    },
+    {
+      title: 'Exotic Bull',
+      desc: 'Línea exótica de máxima compactación, hueso denso, cabeza esculpida y biomecánica funcional comprobada.',
+      height: '11 - 14 pulgadas',
+      bone: 'Protocolo Funcional',
+      tag: 'EXOTIC LINE',
+      accent: 'border-[#D4AF37]/50',
+      bgGlow: 'from-[#241A0E]/40 to-[#12110D]',
+    },
+    {
+      title: 'American Bully Pocket / Standard',
+      desc: 'Masa muscular equilibrada en alzada oficial, costillar en barril y tren posterior sólido de exposición.',
+      height: '14 - 20 pulgadas',
+      bone: 'Caja Torácica en Barril',
+      tag: 'SHOW STANDARD',
+      accent: 'border-yellow-600/40',
+      bgGlow: 'from-yellow-950/20 to-[#12110D]',
     },
   ];
 
@@ -129,6 +130,7 @@ export const SpecialEditionSection: React.FC = () => {
               <img
                 src={specialBanner1}
                 alt="Banner Edición Especial 1"
+                referrerPolicy="no-referrer"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/25 to-transparent" />
@@ -138,7 +140,7 @@ export const SpecialEditionSection: React.FC = () => {
                   Línea Exclusiva
                 </span>
                 <h4 className="text-lg font-black text-white font-serif-luxury mt-1">
-                  Nano & Micro Bully Internacional
+                  Nano Bull & Micro Bully Internacional
                 </h4>
               </div>
             </div>
@@ -150,6 +152,7 @@ export const SpecialEditionSection: React.FC = () => {
               <img
                 src={specialBanner2}
                 alt="Banner Edición Especial 2"
+                referrerPolicy="no-referrer"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/25 to-transparent" />
@@ -159,7 +162,7 @@ export const SpecialEditionSection: React.FC = () => {
                   Vanguardia Morfológica
                 </span>
                 <h4 className="text-lg font-black text-white font-serif-luxury mt-1">
-                  Clean Exotic & Extreme Pocket
+                  Exotic Bull & American Bully Élite
                 </h4>
               </div>
             </div>
@@ -226,7 +229,7 @@ export const SpecialEditionSection: React.FC = () => {
                 className="p-5 rounded-2xl bg-[#12110D] border-2 border-[#D4AF37]/40 shadow-xl space-y-4 hover:border-[#FFE885] transition-all"
               >
                 <div className="h-48 rounded-xl overflow-hidden border border-[#D4AF37]/50 bg-black">
-                  <img src={dog.imageUrl} alt={dog.name} className="w-full h-full object-cover" />
+                  <img src={dog.imageUrl} alt={dog.name} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
                 </div>
 
                 <div className="space-y-1">

@@ -1,9 +1,11 @@
 import React from 'react';
 import { useTranslation, LANGUAGES, SupportedLocale } from '../context/LanguageContext';
+import { useDynamicContent } from '../utils/dynamicContent';
 import { Shield, Sparkles, Heart } from 'lucide-react';
 
 export const Footer: React.FC = () => {
   const { locale, setLocale, t } = useTranslation();
+  const { content } = useDynamicContent();
 
   return (
     <footer className="bg-[#070707] border-t border-[#C9A86A]/20 pt-16 pb-12 text-neutral-400 text-xs">
@@ -14,9 +16,12 @@ export const Footer: React.FC = () => {
             <div className="flex items-center gap-3.5">
               <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-[#D4AF37] p-0.5 bg-[#141414] shadow-[0_0_15px_rgba(212,175,55,0.4)]">
                 <img
-                  src="/logo-inbr.jpg"
+                  src={content.siteLogoUrl || '/logo-inbr.jpg'}
                   alt="INBR Official Medallion"
                   className="w-full h-full object-cover rounded-full"
+                  onError={(e) => {
+                    e.currentTarget.src = '/logo-inbr.jpg';
+                  }}
                 />
               </div>
               <div>

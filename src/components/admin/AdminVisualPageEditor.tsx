@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   useDynamicContent, 
   DynamicBreedCardItem, 
@@ -6,6 +6,7 @@ import {
   saveDynamicContentAsync,
   uploadCmsImage 
 } from '../../utils/dynamicContent';
+import { BREED_IMAGES } from '../../utils/breedImages';
 import { 
   Layers, 
   Sparkles, 
@@ -41,12 +42,20 @@ interface ExtendedBreedItem extends DynamicBreedCardItem {
 export const AdminVisualPageEditor: React.FC = () => {
   const { content, updateContent } = useDynamicContent();
 
-  const [activeSection, setActiveSection] = useState<'breeds' | 'hero' | 'about' | 'events'>('breeds');
+  const [activeSection, setActiveSection] = useState<'breeds' | 'banners' | 'halloffame'>('breeds');
   const [isPreviewMode, setIsPreviewMode] = useState<boolean>(false);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [logoInputUrl, setLogoInputUrl] = useState<string>(content.siteLogoUrl || '/logo-inbr.jpg');
   const [logoUploading, setLogoUploading] = useState<boolean>(false);
+  const [photoUploadingBreedId, setPhotoUploadingBreedId] = useState<string | null>(null);
+  const [uploadingField, setUploadingField] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (content.siteLogoUrl) {
+      setLogoInputUrl(content.siteLogoUrl);
+    }
+  }, [content.siteLogoUrl]);
 
   // Default breeds list if none exists yet
   const defaultBreeds: ExtendedBreedItem[] = [
@@ -57,34 +66,16 @@ export const AdminVisualPageEditor: React.FC = () => {
       subtitle: 'Compañero Supremo y Estructura Muscular',
       description: 'Perro compacto, potente, con gran osamenta, temperamento afable y equilibrio biomecánico.',
       varieties: ['Pocket', 'Standard', 'Classic', 'XL'],
-      image: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=700&q=80',
+      image: BREED_IMAGES.americanBully,
     },
     {
-      id: 'exotic-bully',
-      name: 'Exotic Bully',
+      id: 'exotic-bull',
+      name: 'Exotic Bull',
       category: 'bull',
-      subtitle: 'Fenotipo Extremo y Agilidad Preservada',
+      subtitle: 'Fenotipo Compacto y Agilidad Preservada',
       description: 'Evolución morfológica con máxima compactación, densidad ósea y apego al protocolo de salud INBR.',
-      varieties: ['Micro', 'Clean Exotic', 'Nano'],
-      image: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=700&q=80',
-    },
-    {
-      id: 'cane-corso',
-      name: 'Cane Corso Italiano',
-      category: 'guard',
-      subtitle: 'Moloso de Guardia y Protección Familiar',
-      description: 'Moloso potente, atlético y majestuoso. Mordida en ligero prognatismo, cuello musculoso y aplomos de gran firmeza.',
-      varieties: ['Negro', 'Gris Plomo', 'Leonado'],
-      image: 'https://images.unsplash.com/photo-1568572933382-74d440642117?auto=format&fit=crop&w=700&q=80',
-    },
-    {
-      id: 'pastor-belga-malinois',
-      name: 'Pastor Belga Malinois',
-      category: 'work',
-      subtitle: 'Trabajo Deportivo, K9 e Inteligencia Operativa',
-      description: 'Canino de trabajo con potencia de mordida, máxima agilidad, impulsos equilibrados y líneas de trabajo consagradas.',
-      varieties: ['Línea de Ring Francés', 'Mondioring', 'K9 Operativo'],
-      image: 'https://images.unsplash.com/photo-1588943211346-090881b5782a?auto=format&fit=crop&w=700&q=80',
+      varieties: ['Micro', 'Nano Bull', 'Exotic Standard'],
+      image: BREED_IMAGES.exoticBull,
     },
     {
       id: 'french-bulldog',
@@ -93,7 +84,43 @@ export const AdminVisualPageEditor: React.FC = () => {
       subtitle: 'Moloso Compacto de Compañía',
       description: 'Cuerpo compacto, orejas de murciélago, pecho ancho y excelente respiración con narinas abiertas.',
       varieties: ['Estándar Fawn/Brindle', 'Fluffy', 'Visual Isabella'],
-      image: 'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?auto=format&fit=crop&w=700&q=80',
+      image: BREED_IMAGES.frenchBulldog,
+    },
+    {
+      id: 'english-bulldog',
+      name: 'English Bulldog',
+      category: 'bull',
+      subtitle: 'Bulldog Inglés Oficial',
+      description: 'Cuerpo ancho, pecho bajo y hombros poderosos. Cabeza masiva con arrugas moderadas y mordida firme.',
+      varieties: ['Show Classic', 'Tri-Color', 'Heavy Bone'],
+      image: BREED_IMAGES.englishBulldog,
+    },
+    {
+      id: 'cane-corso',
+      name: 'Cane Corso Italiano',
+      category: 'guard',
+      subtitle: 'Moloso de Guardia y Protección Familiar',
+      description: 'Moloso potente, atlético y majestuoso. Mordida en ligero prognatismo, cuello musculoso y aplomos de gran firmeza.',
+      varieties: ['Negro', 'Gris Plomo', 'Leonado'],
+      image: BREED_IMAGES.caneCorso,
+    },
+    {
+      id: 'pastor-aleman',
+      name: 'Pastor Alemán',
+      category: 'work',
+      subtitle: 'Línea de Trabajo, Guardia y Estructura',
+      description: 'Canino versátil de estructura sólida, trote amplio y gran equilibrio nervioso para servicio y familia.',
+      varieties: ['Línea de Trabajo', 'Línea de Show', 'Manto Negro / Sable'],
+      image: BREED_IMAGES.pastorAleman,
+    },
+    {
+      id: 'pastor-belga-malinois',
+      name: 'Pastor Belga Malinois',
+      category: 'work',
+      subtitle: 'Trabajo Deportivo, K9 e Inteligencia Operativa',
+      description: 'Canino de trabajo con potencia de mordida, máxima agilidad, impulsos equilibrados y líneas de trabajo consagradas.',
+      varieties: ['Línea de Ring Francés', 'Mondioring', 'K9 Operativo'],
+      image: BREED_IMAGES.pastorBelgaMalinois,
     },
     {
       id: 'doberman',
@@ -102,7 +129,7 @@ export const AdminVisualPageEditor: React.FC = () => {
       subtitle: 'Elegancia, Firmeza y Máximo Carácter',
       description: 'Silueta esculpida, porte noble y lealtad incondicional. Excelente dorso firme y trote amplio elástico.',
       varieties: ['Línea Europea', 'Línea Americana'],
-      image: 'https://images.unsplash.com/photo-1601758228041-f3b2795255f1?auto=format&fit=crop&w=700&q=80',
+      image: BREED_IMAGES.doberman,
     },
     {
       id: 'rottweiler',
@@ -111,7 +138,7 @@ export const AdminVisualPageEditor: React.FC = () => {
       subtitle: 'Potencia, Determinación y Estructura Robusta',
       description: 'Canino de origen germano con cabeza potente, marcas de fuego delimitadas y temperamento equilibrado.',
       varieties: ['Línea ADRK', 'Línea Internacional'],
-      image: 'https://images.unsplash.com/photo-1567752881298-894bb81f9379?auto=format&fit=crop&w=700&q=80',
+      image: BREED_IMAGES.rottweiler,
     },
     {
       id: 'american-pit-bull',
@@ -120,7 +147,7 @@ export const AdminVisualPageEditor: React.FC = () => {
       subtitle: 'Raza Atlética de Rendimiento Histórico',
       description: 'Musculatura magra, impulsión posterior sobresaliente y tenacidad con enfoque deportivo oficial.',
       varieties: ['Game Dog Tradicional', 'Conformación Deportiva'],
-      image: 'https://images.unsplash.com/photo-1576201836106-db1758fd1c97?auto=format&fit=crop&w=700&q=80',
+      image: BREED_IMAGES.apbt,
     },
   ];
 
@@ -130,6 +157,35 @@ export const AdminVisualPageEditor: React.FC = () => {
       ? (content.bullBreedsList as ExtendedBreedItem[])
       : defaultBreeds;
   });
+
+  // Sync breedsList when content hydrates from Supabase
+  useEffect(() => {
+    if (content.bullBreedsList && content.bullBreedsList.length > 0) {
+      setBreedsList(content.bullBreedsList as ExtendedBreedItem[]);
+    }
+  }, [content.bullBreedsList]);
+
+  const handleFieldImageUpload = async (field: keyof DynamicContentConfig, file: File) => {
+    setUploadingField(String(field));
+    try {
+      const url = await uploadCmsImage(file);
+      updateContent({ [field]: url } as Partial<DynamicContentConfig>);
+      await saveDynamicContentAsync({ [field]: url } as Partial<DynamicContentConfig>);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      console.error('Error al subir imagen:', err);
+    } finally {
+      setUploadingField(null);
+    }
+  };
+
+  const handleFieldImageUpdate = async (field: keyof DynamicContentConfig, url: string) => {
+    updateContent({ [field]: url } as Partial<DynamicContentConfig>);
+    await saveDynamicContentAsync({ [field]: url } as Partial<DynamicContentConfig>);
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2500);
+  };
 
   // Modal / prompt for changing an image URL
   const [activeImagePromptBreedId, setActiveImagePromptBreedId] = useState<string | null>(null);
@@ -159,7 +215,7 @@ export const AdminVisualPageEditor: React.FC = () => {
   };
 
   // 1. Quitar Imagen de una raza
-  const handleRemoveImage = (breedId: string) => {
+  const handleRemoveImage = async (breedId: string) => {
     const updated = breedsList.map((b) => {
       if (b.id === breedId) {
         return { ...b, image: '' };
@@ -168,10 +224,13 @@ export const AdminVisualPageEditor: React.FC = () => {
     });
     setBreedsList(updated);
     updateContent({ bullBreedsList: updated });
+    await saveDynamicContentAsync({ bullBreedsList: updated });
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2500);
   };
 
   // 2. Establecer / Cambiar imagen
-  const handleApplyNewImage = (breedId: string) => {
+  const handleApplyNewImage = async (breedId: string) => {
     if (!newImageUrl.trim()) return;
     const updated = breedsList.map((b) => {
       if (b.id === breedId) {
@@ -181,8 +240,11 @@ export const AdminVisualPageEditor: React.FC = () => {
     });
     setBreedsList(updated);
     updateContent({ bullBreedsList: updated });
+    await saveDynamicContentAsync({ bullBreedsList: updated });
     setActiveImagePromptBreedId(null);
     setNewImageUrl('');
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2500);
   };
 
   // 3. Borrar texto de descripción
@@ -253,7 +315,7 @@ export const AdminVisualPageEditor: React.FC = () => {
       subtitle: 'Estándar y Morfología Homologada',
       description: 'Descripción morfológica y genética oficial del ejemplar según libro genealógico INBR.',
       varieties: ['Estándar Oficial'],
-      image: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=700&q=80',
+      image: BREED_IMAGES.americanBully,
     };
     const updated = [newBreed, ...breedsList];
     setBreedsList(updated);
@@ -370,6 +432,7 @@ export const AdminVisualPageEditor: React.FC = () => {
               <img
                 src={content.siteLogoUrl || '/logo-inbr.jpg'}
                 alt="Logo INBR Oficial"
+                referrerPolicy="no-referrer"
                 className="w-full h-full object-cover rounded-full"
               />
             </div>
@@ -458,8 +521,228 @@ export const AdminVisualPageEditor: React.FC = () => {
       </div>
 
       {/* ========================================================================= */}
+      {/* SELECTOR DE SECCIONES PARA CAMBIAR TODAS LAS FOTOS DE LA WEB              */}
+      {/* ========================================================================= */}
+      <div className="flex flex-wrap items-center gap-2 p-3 rounded-2xl bg-[#110F0A] border border-[#D4AF37]/40">
+        <span className="text-[11px] font-mono uppercase text-[#D4AF37] font-bold px-2">
+          Sección a Editar:
+        </span>
+        {[
+          { id: 'breeds', label: '🐕 Razas Oficiales (Tarjetas y Fotos)' },
+          { id: 'banners', label: '🖼️ Portada, Edición Especial y Eventos' },
+          { id: 'halloffame', label: '👑 Salón de la Fama y Quiénes Somos' },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveSection(tab.id as any)}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeSection === tab.id
+                ? 'bg-gold-gradient text-black font-black shadow-lg'
+                : 'bg-black/60 border border-neutral-800 text-neutral-300 hover:text-white hover:border-[#D4AF37]/60'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ========================================================================= */}
+      {/* SECCIÓN A: PORTADA, EDICIÓN ESPECIAL Y PÓSTER DE EVENTOS                   */}
+      {/* ========================================================================= */}
+      {activeSection === 'banners' && (
+        <div className="bg-[#080808] border border-[#D4AF37]/40 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl">
+          <div>
+            <h4 className="text-xl font-black text-white font-serif-luxury">
+              Fotos Panorámicas, Banners de Edición Especial y Póster de Eventos
+            </h4>
+            <p className="text-xs text-neutral-400 mt-1">
+              Sube una foto desde tu celular o computadora, quita la actual o pega un enlace. Se guarda directo en la página oficial.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {[
+              {
+                field: 'heroBannerUrl' as keyof DynamicContentConfig,
+                title: 'Banner Principal de Inicio (Portada)',
+                fallback: BREED_IMAGES.heroBanner,
+                current: content.heroBannerUrl || BREED_IMAGES.heroBanner,
+              },
+              {
+                field: 'eventsBannerUrl' as keyof DynamicContentConfig,
+                title: 'Póster / Foto de Sección Eventos y Expos',
+                fallback: BREED_IMAGES.heroBanner,
+                current: content.eventsBannerUrl || BREED_IMAGES.heroBanner,
+              },
+              {
+                field: 'specialEditionBanner1' as keyof DynamicContentConfig,
+                title: 'Edición Especial • Banner 1 (Nano Bull & Micro)',
+                fallback: BREED_IMAGES.nanoBull,
+                current: content.specialEditionBanner1 || BREED_IMAGES.nanoBull,
+              },
+              {
+                field: 'specialEditionBanner2' as keyof DynamicContentConfig,
+                title: 'Edición Especial • Banner 2 (Exotic Bull & Bully)',
+                fallback: BREED_IMAGES.exoticBull,
+                current: content.specialEditionBanner2 || BREED_IMAGES.exoticBull,
+              },
+            ].map((item) => (
+              <div key={String(item.field)} className="p-4 rounded-2xl bg-[#12110D] border border-[#D4AF37]/40 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-bold text-[#FFE885]">{item.title}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleFieldImageUpdate(item.field, item.fallback)}
+                    className="px-2.5 py-1 rounded-lg bg-neutral-900 border border-neutral-700 text-[10px] text-neutral-300 hover:text-white cursor-pointer"
+                  >
+                    Restaurar
+                  </button>
+                </div>
+
+                <div className="aspect-[21/9] rounded-xl overflow-hidden bg-black border border-neutral-800">
+                  <img
+                    src={item.current}
+                    alt={item.title}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gold-gradient text-black font-black text-xs cursor-pointer hover:brightness-110">
+                    <UploadCloud className="w-4 h-4 text-black" />
+                    <span>{uploadingField === String(item.field) ? 'Subiendo...' : 'Subir Foto'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={uploadingField === String(item.field)}
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) handleFieldImageUpload(item.field, e.target.files[0]);
+                      }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleFieldImageUpdate(item.field, '')}
+                    className="px-3 py-2 rounded-xl bg-red-950/80 border border-red-700 text-red-200 text-xs font-bold hover:bg-red-900 cursor-pointer"
+                  >
+                    Quitar
+                  </button>
+                </div>
+
+                <input
+                  type="text"
+                  value={(content[item.field] as string) || ''}
+                  onChange={(e) => updateContent({ [item.field]: e.target.value } as Partial<DynamicContentConfig>)}
+                  onBlur={(e) => handleFieldImageUpdate(item.field, e.target.value)}
+                  placeholder="O pega URL directa (https://...)"
+                  className="w-full px-3 py-1.5 rounded-lg bg-black border border-neutral-800 text-xs text-neutral-300 font-mono focus:border-[#D4AF37]"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* SECCIÓN B: SALÓN DE LA FAMA Y QUIÉNES SOMOS                               */}
+      {/* ========================================================================= */}
+      {activeSection === 'halloffame' && (
+        <div className="bg-[#080808] border border-[#D4AF37]/40 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl">
+          <div>
+            <h4 className="text-xl font-black text-white font-serif-luxury">
+              Fotos del Salón de la Fama (King Vulcan / Queen Bella) y Quiénes Somos
+            </h4>
+            <p className="text-xs text-neutral-400 mt-1">
+              Sube o cambia las fotografías oficiales de estas secciones con un clic.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              {
+                field: 'hallOfFamePhoto1' as keyof DynamicContentConfig,
+                title: 'Salón de la Fama • King Vulcan',
+                fallback: BREED_IMAGES.americanBully,
+                current: content.hallOfFamePhoto1 || BREED_IMAGES.americanBully,
+              },
+              {
+                field: 'hallOfFamePhoto2' as keyof DynamicContentConfig,
+                title: 'Salón de la Fama • Queen Bella',
+                fallback: BREED_IMAGES.exoticBull,
+                current: content.hallOfFamePhoto2 || BREED_IMAGES.exoticBull,
+              },
+              {
+                field: 'aboutUsPhoto' as keyof DynamicContentConfig,
+                title: 'Sección Quiénes Somos (Directiva)',
+                fallback: BREED_IMAGES.heroBanner,
+                current: content.aboutUsPhoto || BREED_IMAGES.heroBanner,
+              },
+            ].map((item) => (
+              <div key={String(item.field)} className="p-4 rounded-2xl bg-[#12110D] border border-[#D4AF37]/40 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-bold text-[#FFE885]">{item.title}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleFieldImageUpdate(item.field, item.fallback)}
+                    className="px-2 py-1 rounded-lg bg-neutral-900 border border-neutral-700 text-[10px] text-neutral-300 hover:text-white cursor-pointer"
+                  >
+                    Restaurar
+                  </button>
+                </div>
+
+                <div className="aspect-square rounded-xl overflow-hidden bg-black border border-neutral-800">
+                  <img
+                    src={item.current}
+                    alt={item.title}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <label className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gold-gradient text-black font-black text-xs cursor-pointer hover:brightness-110">
+                    <UploadCloud className="w-4 h-4 text-black" />
+                    <span>{uploadingField === String(item.field) ? 'Subiendo...' : 'Subir Foto'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={uploadingField === String(item.field)}
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) handleFieldImageUpload(item.field, e.target.files[0]);
+                      }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleFieldImageUpdate(item.field, '')}
+                    className="px-3 py-2 rounded-xl bg-red-950/80 border border-red-700 text-red-200 text-xs font-bold hover:bg-red-900 cursor-pointer"
+                  >
+                    Quitar
+                  </button>
+                </div>
+
+                <input
+                  type="text"
+                  value={(content[item.field] as string) || ''}
+                  onChange={(e) => updateContent({ [item.field]: e.target.value } as Partial<DynamicContentConfig>)}
+                  onBlur={(e) => handleFieldImageUpdate(item.field, e.target.value)}
+                  placeholder="O pega URL directa (https://...)"
+                  className="w-full px-3 py-1.5 rounded-lg bg-black border border-neutral-800 text-xs text-neutral-300 font-mono focus:border-[#D4AF37]"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* SECCIÓN VISUAL EXACTA: "NUESTRAS RAZAS OFICIALES"                          */}
       {/* ========================================================================= */}
+      {activeSection === 'breeds' && (
       <div className="bg-[#080808] border border-[#D4AF37]/40 rounded-3xl p-6 sm:p-8 relative shadow-2xl">
         
         {/* Banner de la Sección Editable */}
@@ -525,6 +808,7 @@ export const AdminVisualPageEditor: React.FC = () => {
                   <img
                     src={breed.image}
                     alt={breed.name}
+                    referrerPolicy="no-referrer"
                     className="w-full h-full object-cover"
                   />
                 ) : (
@@ -592,19 +876,34 @@ export const AdminVisualPageEditor: React.FC = () => {
                   {/* 1. Botón para abrir galería o cámara del celular / PC */}
                   <label className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-gold-gradient text-black font-black text-xs cursor-pointer shadow-lg hover:brightness-110 active:scale-95 transition-all text-center">
                     <UploadCloud className="w-4 h-4 text-black" />
-                    <span>📷 Elegir Foto de mi Celular o Computadora</span>
+                    <span>
+                      {photoUploadingBreedId === breed.id
+                        ? 'Subiendo foto...'
+                        : '📷 Elegir Foto de mi Celular o Computadora'}
+                    </span>
                     <input
                       type="file"
                       accept="image/*"
+                      disabled={photoUploadingBreedId === breed.id}
                       className="hidden"
                       onChange={async (e) => {
                         if (e.target.files && e.target.files[0]) {
+                          setPhotoUploadingBreedId(breed.id);
                           try {
                             const url = await uploadCmsImage(e.target.files[0]);
-                            handleUpdateBreedField(breed.id, 'image', url);
+                            const updated = breedsList.map((b) =>
+                              b.id === breed.id ? { ...b, image: url } : b
+                            );
+                            setBreedsList(updated);
+                            updateContent({ bullBreedsList: updated });
+                            await saveDynamicContentAsync({ bullBreedsList: updated });
                             setActiveImagePromptBreedId(null);
+                            setSaveSuccess(true);
+                            setTimeout(() => setSaveSuccess(false), 3000);
                           } catch (err) {
                             console.error('Error uploading breed image:', err);
+                          } finally {
+                            setPhotoUploadingBreedId(null);
                           }
                         }
                       }}
@@ -621,7 +920,7 @@ export const AdminVisualPageEditor: React.FC = () => {
                         type="text"
                         value={newImageUrl}
                         onChange={(e) => setNewImageUrl(e.target.value)}
-                        placeholder="https://images.unsplash.com/..."
+                        placeholder="https://..."
                         className="flex-1 px-2.5 py-1.5 text-xs bg-black border border-neutral-700 rounded-lg text-white font-mono focus:border-[#D4AF37] focus:outline-none"
                       />
                       <button
@@ -870,6 +1169,7 @@ export const AdminVisualPageEditor: React.FC = () => {
         </div>
 
       </div>
+      )}
 
     </div>
   );

@@ -19,6 +19,7 @@ import {
   uploadCmsImage,
   DEFAULT_CERTIFICATE_OFFSETS
 } from '../utils/dynamicContent';
+import { BREED_IMAGES } from '../utils/breedImages';
 import { AdminSidebar, AdminTabKey } from './admin/AdminSidebar';
 import { AdminExecutiveTeamEditor } from './admin/AdminExecutiveTeamEditor';
 import { AdminJudgesEditor } from './admin/AdminJudgesEditor';
@@ -167,9 +168,31 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
     remainingInactivitySeconds,
     resetInactivityTimer
   } = useAuth();
-  const { dogs, breeders, isLoadingSupabase, refreshFromSupabase } = useRegistry();
+  const { dogs, breeders, isLoadingSupabase, refreshFromSupabase, updateDogRecord, deleteDogRecord } = useRegistry();
   const { content, updateContent, resetContent } = useDynamicContent();
   const { unreadCount } = useNotifications();
+  const [editingDogReg, setEditingDogReg] = useState<string | null>(null);
+  const [editDogDraft, setEditDogDraft] = useState<{
+    name: string;
+    microchip: string;
+    breed: string;
+    gender: 'Macho' | 'Hembra';
+    color: string;
+    owner: string;
+    sire: string;
+    dam: string;
+  }>({
+    name: '',
+    microchip: '',
+    breed: '',
+    gender: 'Macho',
+    color: '',
+    owner: '',
+    sire: '',
+    dam: '',
+  });
+  const [dogActionMessage, setDogActionMessage] = useState<string | null>(null);
+  const [isSavingDogEdit, setIsSavingDogEdit] = useState<boolean>(false);
 
   // Login Form State (Strict security: inputs always start empty, no saved plaintext)
   const [usernameInput, setUsernameInput] = useState('');
@@ -1270,160 +1293,70 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
         {/* ========================================================================= */}
         {/* 1. TOP FIXED NAVIGATION BAR INSIDE MODAL (95% CONTAINER)                  */}
         {/* ========================================================================= */}
-        <header className="no-print shrink-0 w-full bg-[#14120D] border-b-2 border-[#D4AF37]/60 px-3 sm:px-6 py-2.5 sm:py-3 shadow-2xl z-30 flex flex-wrap items-center justify-between gap-3">
+        <header className="no-print shrink-0 w-full bg-[#14120D] border-b border-[#D4AF37]/50 px-3 sm:px-5 py-2 shadow-xl z-30 flex items-center justify-between gap-2">
           {/* Left: Cerrar Panel / Volver al Sitio */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
             <button
               onClick={onClose}
-              className="flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-black text-black bg-gold-gradient hover:brightness-110 active:scale-95 transition-all shadow-[0_0_15px_rgba(212,175,55,0.5)] cursor-pointer shrink-0"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black text-black bg-gold-gradient hover:brightness-110 active:scale-95 transition-all shadow cursor-pointer shrink-0"
               title="Cerrar el panel administrativo y regresar al sitio principal de la INBR"
             >
-              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
-              <span>Cerrar Panel</span>
+              <ArrowLeft className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Cerrar</span>
             </button>
 
-            <div className="hidden lg:flex items-center gap-2.5 pl-2 border-l border-neutral-800">
-              <div className="w-8 h-8 rounded-xl bg-gold-gradient text-black flex items-center justify-center font-bold shadow-md shrink-0">
-                <Lock className="w-4 h-4" />
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-gold-gradient text-black flex items-center justify-center font-bold shadow shrink-0">
+                <Lock className="w-3.5 h-3.5" />
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-xs sm:text-sm font-bold text-white font-serif-luxury leading-tight">
-                    {isAuthenticated && isMasterUser
-                      ? 'Panel de Administrador Maestro'
-                      : isAuthenticated
-                      ? `Representante: ${user?.name}`
-                      : 'Panel de Control INBR'}
-                  </h3>
-                  <span className="text-[9px] px-2 py-0.5 rounded-full bg-[#20180B] border border-[#D4AF37] text-[#FFE885] font-mono font-bold">
-                    SUITE 2026
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[10px] text-neutral-400 font-mono">
-                    Acceso directo: <strong className="text-[#FFE885]">/#admin</strong> o <strong className="text-[#FFE885]">/admin</strong>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (typeof navigator !== 'undefined' && typeof window !== 'undefined') {
-                        navigator.clipboard.writeText(`${window.location.origin}/#admin`);
-                        alert('URL directa copiada al portapapeles: ' + window.location.origin + '/#admin');
-                      }
-                    }}
-                    className="text-[10px] text-[#D4AF37] hover:text-white font-bold underline"
-                    title="Copiar URL directa para entrar al panel maestro"
-                  >
-                    Copiar URL
-                  </button>
-                </div>
-              </div>
+              <h3 className="text-xs sm:text-sm font-bold text-white font-serif-luxury leading-tight truncate">
+                {isAuthenticated && isMasterUser
+                  ? 'Panel de Administrador Maestro'
+                  : isAuthenticated
+                  ? `Representante: ${user?.name}`
+                  : 'Panel de Control INBR'}
+              </h3>
             </div>
           </div>
 
-          {/* Center: Navigation buttons adapted by role (Master vs Representative - Desktop only) */}
-          {isAuthenticated && (
-            <nav className="hidden lg:flex items-center gap-1.5 sm:gap-2 overflow-x-auto py-1 max-w-full">
-              {isMasterUser ? (
-                <>
-                  <button
-                    onClick={() => handleTabChange('search')}
-                    className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                      activeTab === 'search' || activeTab === 'generator' || activeTab === 'litters'
-                        ? 'bg-gold-gradient text-black shadow-lg font-black'
-                        : 'text-neutral-300 hover:text-white bg-[#1A1813] border border-neutral-800 hover:border-[#D4AF37]/50'
-                    }`}
-                    title="Ir al Panel Maestro (Buscador centralizado de registros y consultas)"
-                  >
-                    <Layers className="w-4 h-4" />
-                    <span>Panel Maestro</span>
-                  </button>
+          {/* Center: Compact Representative nav only when logged in as Representative (Master uses AdminSidebar) */}
+          {isAuthenticated && !isMasterUser && (
+            <nav className="hidden lg:flex items-center gap-1.5 overflow-x-auto py-0.5 max-w-full">
+              <button
+                onClick={() => handleTabChange('litters')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'litters'
+                    ? 'bg-gold-gradient text-black shadow font-black'
+                    : 'text-neutral-300 hover:text-white bg-[#1A1813] border border-neutral-800'
+                }`}
+              >
+                <Video className="w-3.5 h-3.5" />
+                <span>Registrar Camada</span>
+              </button>
 
-                  <button
-                    onClick={() => handleTabChange('content')}
-                    className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                      activeTab === 'content'
-                        ? 'bg-gold-gradient text-black shadow-lg font-black'
-                        : 'text-neutral-300 hover:text-white bg-[#1A1813] border border-neutral-800 hover:border-[#D4AF37]/50'
-                    }`}
-                    title="Ir a Gestión de Contenido Visual en Vivo"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                    <span>Gestión Visual de Contenido</span>
-                  </button>
+              <button
+                onClick={() => handleTabChange('generator')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'generator'
+                    ? 'bg-gold-gradient text-black shadow font-black'
+                    : 'text-neutral-300 hover:text-white bg-[#1A1813] border border-neutral-800'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Trámites</span>
+              </button>
 
-                  <button
-                    onClick={() => handleTabChange('representatives')}
-                    className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                      activeTab === 'representatives'
-                        ? 'bg-gold-gradient text-black shadow-lg font-black'
-                        : 'text-neutral-300 hover:text-white bg-[#1A1813] border border-neutral-800 hover:border-[#D4AF37]/50'
-                    }`}
-                    title="Administrador de Cuentas de Representantes"
-                  >
-                    <Users className="w-4 h-4" />
-                    <span>Cuentas de Representantes</span>
-                  </button>
-
-                  <button
-                    onClick={() => handleTabChange('activity_logs')}
-                    className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                      activeTab === 'activity_logs'
-                        ? 'bg-gold-gradient text-black shadow-lg font-black'
-                        : 'text-neutral-300 hover:text-white bg-[#1A1813] border border-neutral-800 hover:border-[#D4AF37]/50'
-                    }`}
-                    title="Ir a Logs de Actividad Supabase"
-                  >
-                    <FileText className="w-4 h-4" />
-                    <span>Logs</span>
-                    <span className="px-1.5 py-0.5 rounded-full bg-black/40 text-[10px] font-mono text-[#FFE885]">
-                      {activityLogs.length}
-                    </span>
-                  </button>
-                </>
-              ) : (
-                /* Representante Autorizado: Exclusivamente funciones de carga y trámites */
-                <>
-                  <button
-                    onClick={() => handleTabChange('litters')}
-                    className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                      activeTab === 'litters'
-                        ? 'bg-gold-gradient text-black shadow-lg font-black'
-                        : 'text-neutral-300 hover:text-white bg-[#1A1813] border border-neutral-800 hover:border-[#D4AF37]/50'
-                    }`}
-                    title="Registrar camada oficial con video"
-                  >
-                    <Video className="w-4 h-4" />
-                    <span>Registrar Camada</span>
-                  </button>
-
-                  <button
-                    onClick={() => handleTabChange('generator')}
-                    className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                      activeTab === 'generator'
-                        ? 'bg-gold-gradient text-black shadow-lg font-black'
-                        : 'text-neutral-300 hover:text-white bg-[#1A1813] border border-neutral-800 hover:border-[#D4AF37]/50'
-                    }`}
-                    title="Cargar trámite de homologación o registro F1"
-                  >
-                    <FileText className="w-4 h-4" />
-                    <span>Trámites (Homologación / F1)</span>
-                  </button>
-
-                  <button
-                    onClick={() => handleTabChange('search')}
-                    className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                      activeTab === 'search'
-                        ? 'bg-gold-gradient text-black shadow-lg font-black'
-                        : 'text-neutral-300 hover:text-white bg-[#1A1813] border border-neutral-800 hover:border-[#D4AF37]/50'
-                    }`}
-                    title="Consultar base de datos y microchips"
-                  >
-                    <Search className="w-4 h-4" />
-                    <span>Consultar Registros</span>
-                  </button>
-                </>
-              )}
+              <button
+                onClick={() => handleTabChange('search')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'search'
+                    ? 'bg-gold-gradient text-black shadow font-black'
+                    : 'text-neutral-300 hover:text-white bg-[#1A1813] border border-neutral-800'
+                }`}
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span>Consultar Registros</span>
+              </button>
             </nav>
           )}
 
@@ -1520,7 +1453,7 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
           <div className="p-4 sm:p-8 max-w-lg mx-auto w-full my-auto sm:my-8 rounded-3xl bg-gradient-to-b from-[#1C160C] via-[#141009] to-[#0D0B08] border-2 border-[#D4AF37] shadow-[0_10px_50px_rgba(0,0,0,0.9)]">
             <div className="text-center mb-6">
               <div className="w-20 h-20 rounded-full border-2 border-[#D4AF37] p-1 mx-auto mb-3 shadow-[0_0_30px_rgba(212,175,55,0.4)] bg-black">
-                <img src="/logo-inbr.jpg" alt="Logo" className="w-full h-full object-cover rounded-full" />
+                <img src={content.siteLogoUrl || '/logo-inbr.jpg'} alt="Logo" className="w-full h-full object-cover rounded-full" onError={(e) => { e.currentTarget.src = '/logo-inbr.jpg'; }} />
               </div>
               <h4 className="text-xl sm:text-2xl font-black text-white font-serif-luxury uppercase tracking-wider">
                 Ingreso al Panel Maestro
@@ -1658,136 +1591,31 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
           /* ========================================================================= */
           <div className="flex flex-col">
             
-            {/* WIDGET: RESUMEN DE ESTADÍSTICAS OFICIALES EN TIEMPO REAL (COLAPSIBLE EN CELULAR) */}
+            {/* WIDGET COMPACTO DE ESTADO EN UNA SOLA LÍNEA (MAXIMIZA ESPACIO EN PANTALLA) */}
             {!isNavRetracted && (
-              <div className="no-print border-b border-[#D4AF37]/30 bg-gradient-to-b from-[#18140C] via-[#0F0E0B] to-[#0A0A0A]">
-                {/* BARRA DE COLAPSO MOBILE (md:hidden) */}
-                <div className="md:hidden px-3.5 py-2 flex items-center justify-between border-b border-neutral-800">
-                  <button
-                    type="button"
-                    onClick={() => setShowMobileStats(!showMobileStats)}
-                    className="flex items-center gap-1.5 text-xs text-[#FFE885] font-mono font-bold cursor-pointer"
-                  >
-                    <Award className="w-3.5 h-3.5 text-[#D4AF37]" />
-                    <span>{showMobileStats ? '▲ Ocultar Métricas' : `▼ Ver Métricas (${dogs.length} Ejemplares • ${breeders.length} Criaderos)`}</span>
-                  </button>
-
-                  <button
-                    onClick={() => refreshFromSupabase()}
-                    disabled={isLoadingSupabase}
-                    className="flex items-center gap-1 text-[10px] text-neutral-400 font-mono hover:text-[#FFE885]"
-                  >
-                    <RefreshCw className={`w-3 h-3 ${isLoadingSupabase ? 'animate-spin text-[#D4AF37]' : ''}`} />
-                    <span>{isLoadingSupabase ? 'Cargando...' : 'Actualizar'}</span>
-                  </button>
+              <div className="no-print border-b border-[#D4AF37]/25 bg-[#0F0E0B] px-3 sm:px-5 py-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Supabase En Vivo
+                  </span>
+                  <span className="text-neutral-400">
+                    Ejemplares: <strong className="text-white">{dogs.length}</strong>
+                  </span>
+                  <span className="hidden sm:inline text-neutral-400">
+                    Criaderos: <strong className="text-white">{breeders.length}</strong>
+                  </span>
                 </div>
 
-                {/* CONTENIDO DE MÉTRICAS: Desplegado en desktop, condicional en celular */}
-                <div className={`${showMobileStats ? 'block' : 'hidden'} md:block p-3 sm:p-5 animate-fadeIn`}>
-                  <div className="hidden md:flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                      <span className="text-[11px] font-mono uppercase tracking-wider text-[#D4AF37] font-bold">
-                        Métricas del Sistema en Tiempo Real • Base de Datos Supabase Conectada
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => refreshFromSupabase()}
-                      disabled={isLoadingSupabase}
-                      className="flex items-center gap-1.5 text-[10px] text-neutral-400 font-mono hover:text-[#FFE885] transition-colors"
-                    >
-                      <RefreshCw className={`w-3 h-3 ${isLoadingSupabase ? 'animate-spin text-[#D4AF37]' : ''}`} />
-                      <span>{isLoadingSupabase ? 'Sincronizando...' : 'Actualizar Datos Supabase'}</span>
-                    </button>
-                  </div>
-
-                  {/* GRID LAYOUT FOR SUMMARY STATS */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4">
-                    <div className="p-3 sm:p-3.5 rounded-2xl bg-black/60 border border-[#D4AF37]/40 hover:border-[#D4AF37] transition-all shadow-md relative overflow-hidden group">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-neutral-400 font-mono block">
-                            Ejemplares
-                          </span>
-                          <div className="flex items-baseline gap-1.5 sm:gap-2 mt-1">
-                            <span className="text-xl sm:text-2xl font-black text-white font-serif-luxury">
-                              {dogs.length}
-                            </span>
-                            <span className="text-[8px] sm:text-[9px] font-mono text-emerald-400 font-bold bg-emerald-950/80 px-1.5 py-0.2 rounded border border-emerald-800">
-                              En Vivo
-                            </span>
-                          </div>
-                        </div>
-                        <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-[#2D2311] to-[#120F08] border border-[#D4AF37] flex items-center justify-center text-[#FFE885] shadow shrink-0">
-                          <Award className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-3 sm:p-3.5 rounded-2xl bg-black/60 border border-[#D4AF37]/40 hover:border-[#D4AF37] transition-all shadow-md relative overflow-hidden group">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-neutral-400 font-mono block">
-                            Criaderos
-                          </span>
-                          <div className="flex items-baseline gap-1.5 sm:gap-2 mt-1">
-                            <span className="text-xl sm:text-2xl font-black text-white font-serif-luxury">
-                              {breeders.length}
-                            </span>
-                            <span className="text-[8px] sm:text-[9px] font-mono text-[#FFE885] font-bold bg-[#261E0E] px-1.5 py-0.2 rounded border border-[#D4AF37]/60">
-                              Oficiales
-                            </span>
-                          </div>
-                        </div>
-                        <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-[#12231A] to-[#0A140F] border border-emerald-600/80 flex items-center justify-center text-emerald-300 shadow shrink-0">
-                          <Users className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-3 sm:p-3.5 rounded-2xl bg-black/60 border border-[#D4AF37]/40 hover:border-[#D4AF37] transition-all shadow-md relative overflow-hidden group">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-neutral-400 font-mono block">
-                            Eventos 2026
-                          </span>
-                          <div className="flex items-baseline gap-1.5 sm:gap-2 mt-1">
-                            <span className="text-xl sm:text-2xl font-black text-white font-serif-luxury">
-                              {UPCOMING_EVENTS.length}
-                            </span>
-                            <span className="text-[8px] sm:text-[9px] font-mono text-amber-300 font-bold bg-amber-950/80 px-1.5 py-0.2 rounded border border-amber-800">
-                              Copas
-                            </span>
-                          </div>
-                        </div>
-                        <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-[#2D1F0E] to-[#140D05] border border-amber-600/80 flex items-center justify-center text-amber-300 shadow shrink-0">
-                          <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-3 sm:p-3.5 rounded-2xl bg-black/60 border border-[#D4AF37]/40 hover:border-[#D4AF37] transition-all shadow-md relative overflow-hidden group">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-neutral-400 font-mono block">
-                            Logs Auditoría
-                          </span>
-                          <div className="flex items-baseline gap-1.5 sm:gap-2 mt-1">
-                            <span className="text-xl sm:text-2xl font-black text-white font-serif-luxury">
-                              {activityLogs.length}
-                            </span>
-                            <span className="text-[8px] sm:text-[9px] font-mono text-[#FFE885] font-bold bg-[#261E0E] px-1.5 py-0.2 rounded border border-[#D4AF37]/60">
-                              Seguros
-                            </span>
-                          </div>
-                        </div>
-                        <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-[#2D2311] to-[#14120D] border border-[#D4AF37] flex items-center justify-center text-[#FFE885] shadow shrink-0">
-                          <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => refreshFromSupabase()}
+                  disabled={isLoadingSupabase}
+                  className="flex items-center gap-1.5 text-[11px] text-[#FFE885] hover:text-white transition-colors cursor-pointer"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isLoadingSupabase ? 'animate-spin text-[#D4AF37]' : ''}`} />
+                  <span>{isLoadingSupabase ? 'Sincronizando...' : 'Actualizar Datos Supabase'}</span>
+                </button>
               </div>
             )}
 
@@ -2480,7 +2308,165 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
                                 <Copy className="w-4 h-4 text-[#D4AF37]" />
                                 <span>Copiar Ficha Completa</span>
                               </button>
+
+                              {isMasterUser && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (editingDogReg === activeSearchDog.regNumber) {
+                                        setEditingDogReg(null);
+                                      } else {
+                                        setEditingDogReg(activeSearchDog.regNumber);
+                                        setEditDogDraft({
+                                          name: activeSearchDog.name || '',
+                                          microchip: activeSearchDog.microchip || '',
+                                          breed: activeSearchDog.breed || 'American Bully',
+                                          gender: activeSearchDog.gender === 'Hembra' ? 'Hembra' : 'Macho',
+                                          color: activeSearchDog.color || '',
+                                          owner: activeSearchDog.owner || '',
+                                          sire: activeSearchDog.sire || '',
+                                          dam: activeSearchDog.dam || '',
+                                        });
+                                      }
+                                    }}
+                                    className="flex items-center gap-2 px-4 py-3 rounded-xl bg-[#221A0E] border border-[#D4AF37] text-[#FFE885] hover:bg-[#332714] font-bold text-xs sm:text-sm transition-all shadow cursor-pointer"
+                                  >
+                                    <Edit3 className="w-4 h-4 text-[#D4AF37]" />
+                                    <span>{editingDogReg === activeSearchDog.regNumber ? 'Cancelar Edición' : 'Editar Datos'}</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const res = await deleteDogRecord(activeSearchDog.regNumber);
+                                      if (res.success) {
+                                        setDogActionMessage(`Registro ${activeSearchDog.regNumber} eliminado de Supabase.`);
+                                        setEditingDogReg(null);
+                                        setTimeout(() => setDogActionMessage(null), 4000);
+                                      } else {
+                                        setDogActionMessage(`Error al eliminar: ${res.error}`);
+                                      }
+                                    }}
+                                    className="flex items-center gap-2 px-4 py-3 rounded-xl bg-rose-950/70 border border-rose-700 text-rose-200 hover:bg-rose-900 font-bold text-xs sm:text-sm transition-all shadow cursor-pointer"
+                                  >
+                                    <Trash2 className="w-4 h-4 text-rose-400" />
+                                    <span>Eliminar</span>
+                                  </button>
+                                </>
+                              )}
                             </div>
+
+                            {dogActionMessage && (
+                              <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-500 text-emerald-200 text-xs font-bold">
+                                {dogActionMessage}
+                              </div>
+                            )}
+
+                            {isMasterUser && editingDogReg === activeSearchDog.regNumber && (
+                              <div className="p-4 rounded-2xl bg-[#15120A] border-2 border-[#D4AF37] space-y-3 text-left">
+                                <h5 className="text-xs font-black uppercase text-[#FFE885] font-mono">
+                                  Corregir Registro {activeSearchDog.regNumber} en Supabase:
+                                </h5>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                                  <div>
+                                    <label className="text-[10px] text-neutral-400 block mb-1">Nombre del Ejemplar:</label>
+                                    <input
+                                      type="text"
+                                      value={editDogDraft.name}
+                                      onChange={(e) => setEditDogDraft({ ...editDogDraft, name: e.target.value })}
+                                      className="w-full px-3 py-2 rounded-lg bg-black border border-neutral-700 text-white font-bold"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-neutral-400 block mb-1">Microchip ISO:</label>
+                                    <input
+                                      type="text"
+                                      value={editDogDraft.microchip}
+                                      onChange={(e) => setEditDogDraft({ ...editDogDraft, microchip: e.target.value })}
+                                      className="w-full px-3 py-2 rounded-lg bg-black border border-neutral-700 text-white font-mono"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-neutral-400 block mb-1">Propietario:</label>
+                                    <input
+                                      type="text"
+                                      value={editDogDraft.owner}
+                                      onChange={(e) => setEditDogDraft({ ...editDogDraft, owner: e.target.value })}
+                                      className="w-full px-3 py-2 rounded-lg bg-black border border-neutral-700 text-white"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-neutral-400 block mb-1">Raza:</label>
+                                    <input
+                                      type="text"
+                                      value={editDogDraft.breed}
+                                      onChange={(e) => setEditDogDraft({ ...editDogDraft, breed: e.target.value })}
+                                      className="w-full px-3 py-2 rounded-lg bg-black border border-neutral-700 text-white"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-neutral-400 block mb-1">Padre (Sire):</label>
+                                    <input
+                                      type="text"
+                                      value={editDogDraft.sire}
+                                      onChange={(e) => setEditDogDraft({ ...editDogDraft, sire: e.target.value })}
+                                      className="w-full px-3 py-2 rounded-lg bg-black border border-neutral-700 text-white"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-neutral-400 block mb-1">Madre (Dam):</label>
+                                    <input
+                                      type="text"
+                                      value={editDogDraft.dam}
+                                      onChange={(e) => setEditDogDraft({ ...editDogDraft, dam: e.target.value })}
+                                      className="w-full px-3 py-2 rounded-lg bg-black border border-neutral-700 text-white"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-neutral-400 block mb-1">Color:</label>
+                                    <input
+                                      type="text"
+                                      value={editDogDraft.color}
+                                      onChange={(e) => setEditDogDraft({ ...editDogDraft, color: e.target.value })}
+                                      className="w-full px-3 py-2 rounded-lg bg-black border border-neutral-700 text-white"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-neutral-400 block mb-1">Sexo:</label>
+                                    <select
+                                      value={editDogDraft.gender}
+                                      onChange={(e) => setEditDogDraft({ ...editDogDraft, gender: e.target.value === 'Hembra' ? 'Hembra' : 'Macho' })}
+                                      className="w-full px-3 py-2 rounded-lg bg-black border border-neutral-700 text-white"
+                                    >
+                                      <option value="Macho">Macho</option>
+                                      <option value="Hembra">Hembra</option>
+                                    </select>
+                                  </div>
+                                </div>
+                                <div className="flex justify-end gap-2 pt-2">
+                                  <button
+                                    type="button"
+                                    disabled={isSavingDogEdit}
+                                    onClick={async () => {
+                                      setIsSavingDogEdit(true);
+                                      const res = await updateDogRecord(activeSearchDog.regNumber, editDogDraft);
+                                      setIsSavingDogEdit(false);
+                                      if (res.success) {
+                                        setDogActionMessage(`¡Cambios guardados en Supabase para ${activeSearchDog.regNumber}!`);
+                                        setEditingDogReg(null);
+                                        setTimeout(() => setDogActionMessage(null), 4000);
+                                      } else {
+                                        setDogActionMessage(`Error al guardar: ${res.error}`);
+                                      }
+                                    }}
+                                    className="px-4 py-2 rounded-xl bg-gold-gradient text-black font-black text-xs cursor-pointer"
+                                  >
+                                    {isSavingDogEdit ? 'Guardando...' : 'Guardar Corrección en Supabase'}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -4046,8 +4032,9 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
                         {/* Banner Preview */}
                         <div className="aspect-[24/9] w-full rounded-xl overflow-hidden bg-black border border-[#D4AF37]/50 relative">
                           <img
-                            src={formData.heroBannerUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=1400&q=80'}
+                            src={formData.heroBannerUrl || BREED_IMAGES.heroBanner}
                             alt="Banner Preview"
+                            referrerPolicy="no-referrer"
                             className="w-full h-full object-cover"
                           />
                         </div>
@@ -4159,8 +4146,9 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
 
                         <div className="aspect-[24/8] w-full rounded-xl overflow-hidden bg-black border border-[#D4AF37]/50 relative">
                           <img
-                            src={formData.eventsBannerUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=1200&q=80'}
+                            src={formData.eventsBannerUrl || BREED_IMAGES.heroBanner}
                             alt="Póster de Circuitos"
+                            referrerPolicy="no-referrer"
                             className="w-full h-full object-cover"
                           />
                         </div>
@@ -4863,7 +4851,7 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
                               id: `gal-${Date.now()}`,
                               title: 'Nueva Fotografía Oficial',
                               category: 'champions' as const,
-                              imageUrl: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=1000&q=80',
+                              imageUrl: BREED_IMAGES.americanBully,
                               description: 'Ejemplar en pista internacional.',
                               date: 'Temporada 2026',
                             };
@@ -5031,7 +5019,7 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
                               name: 'Nueva Raza Oficial',
                               variety: 'Variedades Reconocidas',
                               standard: 'Descripción del estándar morfológico oficial.',
-                              image: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=800&q=80',
+                              image: BREED_IMAGES.americanBully,
                             };
                             setFormData({ ...formData, breedsList: [...current, newB] });
                           }}
@@ -5166,7 +5154,7 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
                               location: 'Sede / Ciudad',
                               status: 'Inscripciones Abiertas',
                               judges: 'Panel Oficial INBR',
-                              banner: 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?auto=format&fit=crop&w=1000&q=80',
+                              banner: BREED_IMAGES.heroBanner,
                             };
                             setFormData({ ...formData, eventsList: [...current, newEv] });
                           }}
@@ -5508,7 +5496,7 @@ export const AdminRepresentativePanelModal: React.FC<AdminRepresentativePanelMod
                               titles: 'Grand Champion Supreme',
                               year: 'Consagrado 2026',
                               owner: 'Propietario / Kennel',
-                              image: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=800&q=80',
+                              image: BREED_IMAGES.americanBully,
                             };
                             setFormData({ ...formData, hallOfFameList: [...current, newHof] });
                           }}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from '../context/LanguageContext';
 import { useDynamicContent, uploadCmsImage } from '../utils/dynamicContent';
+import { BREED_IMAGES } from '../utils/breedImages';
 import { 
   Sparkles, 
   ArrowRight,
@@ -15,14 +16,14 @@ interface HeroBloodDataProps {
   onGoToForms?: () => void;
 }
 
-const HERO_BG_URL = "https://images.unsplash.com/photo-1588943211346-0908a1fb0b01?q=80&w=1935&auto=format&fit=crop";
+const HERO_BG_URL = BREED_IMAGES.heroBanner;
 
 export const HeroBloodData: React.FC<HeroBloodDataProps> = () => {
   const { t } = useTranslation();
   const { content, updateContent } = useDynamicContent();
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
 
-  const bannerImgUrl = content.heroBannerUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=1400&q=80';
+  const bannerImgUrl = content.heroBannerUrl || BREED_IMAGES.heroBanner;
 
   const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -45,6 +46,7 @@ export const HeroBloodData: React.FC<HeroBloodDataProps> = () => {
         <img
           src={HERO_BG_URL}
           alt="INBR Background"
+          referrerPolicy="no-referrer"
           className="w-full h-full object-cover opacity-25 filter brightness-75 scale-105"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/85 to-[#050505]/60" />
@@ -65,6 +67,7 @@ export const HeroBloodData: React.FC<HeroBloodDataProps> = () => {
                 <img
                   src={content.siteLogoUrl || '/logo-inbr.jpg'}
                   alt="INBR Official Medallion"
+                  referrerPolicy="no-referrer"
                   className="w-full h-full object-cover rounded-full"
                   onError={(e) => {
                     e.currentTarget.src = '/logo-inbr.jpg';
@@ -122,6 +125,7 @@ export const HeroBloodData: React.FC<HeroBloodDataProps> = () => {
             <img
               src={bannerImgUrl}
               alt="Banner Oficial INBR"
+              referrerPolicy="no-referrer"
               className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />

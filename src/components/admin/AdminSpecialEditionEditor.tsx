@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Sparkles, 
   UploadCloud, 
@@ -11,6 +11,7 @@ import {
   Award 
 } from 'lucide-react';
 import { DynamicSpecialEditionItem, uploadCmsImage } from '../../utils/dynamicContent';
+import { BREED_IMAGES } from '../../utils/breedImages';
 
 interface AdminSpecialEditionEditorProps {
   isAdmin: boolean;
@@ -34,6 +35,14 @@ export const AdminSpecialEditionEditor: React.FC<AdminSpecialEditionEditorProps>
   const [isUploadingB1, setIsUploadingB1] = useState(false);
   const [isUploadingB2, setIsUploadingB2] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    setB1(banner1);
+  }, [banner1]);
+
+  useEffect(() => {
+    setB2(banner2);
+  }, [banner2]);
 
   const handleBanner1Upload = async (file: File) => {
     if (!isAdmin) return;
@@ -74,12 +83,12 @@ export const AdminSpecialEditionEditor: React.FC<AdminSpecialEditionEditorProps>
     const newDog: DynamicSpecialEditionItem = {
       id: `sp-${Date.now()}`,
       name: 'NUEVO EJEMPLAR EDICIÓN ESPECIAL',
-      category: 'Exotic Bully / Micro',
+      category: 'Exotic Bull / Micro',
       regNumber: `INBR-SP-00${specialEditionList.length + 1}`,
       owner: 'Propietario Notariado',
       kennel: 'Kennel Internacional',
       height: '11.0 pulgadas',
-      imageUrl: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=600&q=80',
+      imageUrl: BREED_IMAGES.exoticBull,
       status: 'AUTORIZADO OFICIAL',
     };
     onListChange([...specialEditionList, newDog]);
@@ -180,8 +189,9 @@ export const AdminSpecialEditionEditor: React.FC<AdminSpecialEditionEditorProps>
 
             <div className="aspect-[21/9] w-full rounded-xl overflow-hidden bg-neutral-950 border-2 border-[#D4AF37]/50 relative group">
               <img
-                src={b1 || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=1200&q=80'}
+                src={b1 || BREED_IMAGES.nanoBull}
                 alt="Banner 1"
+                referrerPolicy="no-referrer"
                 className="w-full h-full object-cover"
               />
             </div>
@@ -229,8 +239,9 @@ export const AdminSpecialEditionEditor: React.FC<AdminSpecialEditionEditorProps>
 
             <div className="aspect-[21/9] w-full rounded-xl overflow-hidden bg-neutral-950 border-2 border-[#D4AF37]/50 relative group">
               <img
-                src={b2 || 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=1200&q=80'}
+                src={b2 || BREED_IMAGES.exoticBull}
                 alt="Banner 2"
+                referrerPolicy="no-referrer"
                 className="w-full h-full object-cover"
               />
             </div>
@@ -295,6 +306,7 @@ export const AdminSpecialEditionEditor: React.FC<AdminSpecialEditionEditorProps>
                   <img
                     src={dog.imageUrl}
                     alt={dog.name}
+                    referrerPolicy="no-referrer"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                   <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-black/80 border border-[#D4AF37] text-[9px] font-mono text-[#FFE885] font-bold">

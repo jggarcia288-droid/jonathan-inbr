@@ -7,6 +7,7 @@ import {
   uploadCmsImage, 
   saveDynamicContentAsync, 
   DEFAULT_CERTIFICATE_OFFSETS, 
+  sanitizeCertificateOffsets,
   CertificateLayoutOffsets 
 } from '../utils/dynamicContent';
 import { buildEightGenPedigree } from '../utils/pedigreeResolver';
@@ -43,7 +44,8 @@ import {
   Sparkles,
   Dna,
   CreditCard,
-  Crosshair
+  Crosshair,
+  SlidersHorizontal
 } from 'lucide-react';
 import { InteractivePedigreeTree } from './InteractivePedigreeTree';
 
@@ -70,7 +72,8 @@ export const PedigreeCertificateModal: React.FC<PedigreeCertificateModalProps> =
   const [pdfMenuOpen, setPdfMenuOpen] = useState<boolean>(false);
   const [showRestrictedModal, setShowRestrictedModal] = useState<boolean>(false);
 
-  // Admin Drag & Drop state
+  // Admin Drag & Drop & Collapsible Tools state
+  const [showCustomTools, setShowCustomTools] = useState<boolean>(false);
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
   const [selectedField, setSelectedField] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
@@ -117,16 +120,25 @@ export const PedigreeCertificateModal: React.FC<PedigreeCertificateModalProps> =
   const certBackBg = content.certBackBackgroundUrl || '';
   const litterBg = content.litterBackgroundUrl || '';
 
-  // Layout offsets
-  const offsets: CertificateLayoutOffsets = content.certificateOffsets || DEFAULT_CERTIFICATE_OFFSETS;
+  // Layout offsets (sanitized to prevent corrupted coordinates from hiding/overlapping signature & regNumber)
+  const offsets: CertificateLayoutOffsets = sanitizeCertificateOffsets(
+    content.certificateOffsets,
+    Boolean(certFrontBg),
+    Boolean(certBackBg)
+  );
   const [liveOffsets, setLiveOffsets] = useState<CertificateLayoutOffsets>(offsets);
 
   // Ref to always track latest coordinates during drag & drop
   const latestOffsetsRef = useRef<CertificateLayoutOffsets>(offsets);
   useEffect(() => {
-    latestOffsetsRef.current = offsets;
-    setLiveOffsets(offsets);
-  }, [offsets]);
+    const clean = sanitizeCertificateOffsets(
+      content.certificateOffsets,
+      Boolean(certFrontBg),
+      Boolean(certBackBg)
+    );
+    latestOffsetsRef.current = clean;
+    setLiveOffsets(clean);
+  }, [content.certificateOffsets, certFrontBg, certBackBg]);
 
   // Direct persistence to Supabase database (table 'franquicias' with prefijo='CMS_CONFIG')
   const persistOffsetsToSupabase = async (newOffsets: CertificateLayoutOffsets) => {
@@ -310,15 +322,17 @@ export const PedigreeCertificateModal: React.FC<PedigreeCertificateModalProps> =
   const adjustFontSize = (fieldKey: string, delta: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (!isMasterAdmin) return;
-    const current = (offsets as any)[fieldKey] || { x: 0, y: 0, fontSize: 14 };
+    const current = (latestOffsetsRef.current as any)[fieldKey] || { x: 0, y: 0, fontSize: 14 };
     const newSize = Math.max(8, Math.min(60, (current.fontSize || 14) + delta));
     const updated: CertificateLayoutOffsets = {
-      ...offsets,
+      ...latestOffsetsRef.current,
       [fieldKey]: {
         ...current,
         fontSize: newSize,
       },
     };
+    latestOffsetsRef.current = updated;
+    setLiveOffsets(updated);
     updateContent({ ...content, certificateOffsets: updated });
   };
 
@@ -326,26 +340,30 @@ export const PedigreeCertificateModal: React.FC<PedigreeCertificateModalProps> =
   const resetFieldOffset = (fieldKey: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (!isMasterAdmin) return;
-    const current = (offsets as any)[fieldKey] || { x: 0, y: 0, fontSize: 14 };
+    const current = (latestOffsetsRef.current as any)[fieldKey] || { x: 0, y: 0, fontSize: 14 };
     const updated: CertificateLayoutOffsets = {
-      ...offsets,
+      ...latestOffsetsRef.current,
       [fieldKey]: {
         ...current,
         x: 0,
         y: 0,
       },
     };
+    latestOffsetsRef.current = updated;
+    setLiveOffsets(updated);
     updateContent({ ...content, certificateOffsets: updated });
   };
 
-  // Reset all offsets
-  const handleResetAllOffsets = () => {
+  // Reset all offsets cleanly
+  const handleResetAllOffsets = async () => {
     if (!isMasterAdmin) return;
-    if (window.confirm('¿Deseas restablecer todas las coordenadas y posiciones al inicio?')) {
-      updateContent({ ...content, certificateOffsets: DEFAULT_CERTIFICATE_OFFSETS });
-      setFeedback('Posiciones restablecidas');
-      setTimeout(() => setFeedback(null), 3000);
-    }
+    latestOffsetsRef.current = DEFAULT_CERTIFICATE_OFFSETS;
+    setLiveOffsets(DEFAULT_CERTIFICATE_OFFSETS);
+    const updatedContent = { ...content, certificateOffsets: DEFAULT_CERTIFICATE_OFFSETS };
+    updateContent(updatedContent);
+    await persistOffsetsToSupabase(DEFAULT_CERTIFICATE_OFFSETS);
+    setFeedback('✓ Certificado acomodado y guardado sin encimamientos');
+    setTimeout(() => setFeedback(null), 3000);
   };
 
   // Save to Supabase
@@ -894,7 +912,7 @@ export const PedigreeCertificateModal: React.FC<PedigreeCertificateModalProps> =
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/95 backdrop-blur-md overflow-y-auto animate-fadeIn print:p-0 print:bg-white print:overflow-visible">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-2 sm:p-4 bg-black/95 backdrop-blur-md overflow-y-auto animate-fadeIn print:p-0 print:bg-white print:overflow-visible">
       <style>{`
         @media print {
           body {
@@ -948,296 +966,285 @@ export const PedigreeCertificateModal: React.FC<PedigreeCertificateModalProps> =
       {/* Main Modal Window */}
       <div className="relative w-full max-w-7xl bg-[#0D0D0D] border-2 border-[#D4AF37] rounded-3xl shadow-[0_0_60px_rgba(212,175,55,0.4)] overflow-hidden my-4 sm:my-8 flex flex-col print-full-width print:border-none print:shadow-none print:my-0">
         
-        {/* Navigation & Controls Top Bar */}
-        <div className="no-print p-3 sm:p-4 bg-[#14120D] border-b border-[#D4AF37]/40 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-30 shadow-md">
-          {/* Regresar */}
-          <button
-            onClick={onClose}
-            className="flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-black text-[#FFE885] bg-[#221A0F] border-2 border-[#D4AF37] hover:bg-gold-gradient hover:text-black hover:scale-105 active:scale-95 transition-all shadow-md cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>← Regresar</span>
-          </button>
+        {/* Navigation & Controls Top Bar (Compact 2-Strip Sticky Header) */}
+        <div className="no-print bg-[#14120D] border-b border-[#D4AF37]/40 sticky top-0 z-30 shadow-md">
+          {/* Fila 1: Regresar, Ejemplar Activo y Acciones Principales */}
+          <div className="px-3 py-2.5 sm:px-4 flex flex-wrap items-center justify-between gap-2 border-b border-neutral-800/80">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <button
+                onClick={onClose}
+                className="flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-black text-[#FFE885] bg-[#221A0F] border border-[#D4AF37] hover:bg-gold-gradient hover:text-black transition-all shadow cursor-pointer shrink-0"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Regresar</span>
+              </button>
 
-          {/* Selector de Tipo de Documento */}
-          <div className="flex items-center bg-[#080808] border-2 border-[#D4AF37]/60 rounded-xl p-1 shadow-inner gap-1 flex-wrap">
-            <button
-              onClick={() => setSide('front')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                side === 'front'
-                  ? 'bg-gold-gradient text-black shadow-md'
-                  : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>1. Frente (Pedigrí)</span>
-            </button>
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/70 border border-neutral-800 min-w-0">
+                <span className="text-xs font-bold text-white truncate max-w-[180px]">{dog.name}</span>
+                <span className="text-[#D4AF37]">·</span>
+                <span className="text-[11px] font-mono text-[#FFE885] font-bold shrink-0">{dog.regNumber}</span>
+              </div>
 
-            <button
-              onClick={() => setSide('back')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                side === 'back'
-                  ? 'bg-gold-gradient text-black shadow-md'
-                  : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              <Award className="w-3.5 h-3.5" />
-              <span>2. Reverso (Genograma)</span>
-            </button>
+              <a
+                href={getMicrochipVerificationUrl(dog)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-[#0B140F] border border-emerald-500/40 text-emerald-400 hover:bg-emerald-950/40 hover:border-emerald-400 cursor-pointer transition-all shrink-0"
+                title={`Abrir verificación pública para ${dog.microchip || dog.regNumber}`}
+              >
+                <QrCode className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="font-mono">{dog.microchip || dog.regNumber}</span>
+              </a>
+            </div>
 
-            <button
-              onClick={() => setSide('litter')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                side === 'litter'
-                  ? 'bg-gold-gradient text-black shadow-md'
-                  : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              <Baby className="w-3.5 h-3.5" />
-              <span>3. Camada (Cachorros)</span>
-            </button>
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              {isMasterAdmin && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditMode(!isEditMode)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                      isEditMode
+                        ? 'bg-emerald-500 text-black shadow-lg ring-2 ring-emerald-300'
+                        : 'bg-[#1E180E] border border-[#D4AF37]/70 text-[#FFE885] hover:bg-[#2A2214]'
+                    }`}
+                    title="Activar para mover textos, logos y campos directamente con el ratón"
+                  >
+                    <Move className="w-3.5 h-3.5" />
+                    <span className="hidden md:inline">{isEditMode ? '✓ Mover ACTIVO' : 'Mover Campos'}</span>
+                  </button>
 
-            <button
-              onClick={() => setSide('both')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                side === 'both'
-                  ? 'bg-gold-gradient text-black shadow-md'
-                  : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>Doble Cara</span>
-            </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomTools((prev) => !prev)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      showCustomTools
+                        ? 'bg-[#D4AF37] text-black font-black shadow'
+                        : 'bg-[#14120D] border border-neutral-700 text-neutral-300 hover:text-[#FFE885] hover:border-[#D4AF37]'
+                    }`}
+                    title="Desplegar herramientas de fondo, foto, sello y reinicio de posiciones"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                    <span className="hidden md:inline">Personalizar</span>
+                  </button>
+                </>
+              )}
 
-            <button
-              onClick={() => setSide('tree')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                side === 'tree'
-                  ? 'bg-gold-gradient text-black shadow-md font-black'
-                  : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              <Dna className="w-3.5 h-3.5" />
-              <span>4. Árbol Interactivo (4G)</span>
-            </button>
+              {!canDownloadOrPrint && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-black/70 border border-[#D4AF37]/50 text-[#FFE885] text-[11px] font-mono shadow-inner">
+                  <Lock className="w-3.5 h-3.5 text-[#D4AF37]" />
+                  <span className="hidden sm:inline">Solo Visualización Oficial</span>
+                  <span className="sm:hidden">Solo Lectura</span>
+                </div>
+              )}
 
-            <button
-              onClick={() => setSide('pvc')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                side === 'pvc'
-                  ? 'bg-gold-gradient text-black shadow-md font-black'
-                  : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              <CreditCard className="w-3.5 h-3.5" />
-              <span>5. Credencial PVC</span>
-            </button>
+              {canDownloadOrPrint && (
+                <>
+                  <button
+                    onClick={() => handleExportJpg(side === 'litter' ? 'litter' : side === 'back' ? 'back' : 'front')}
+                    disabled={isExportingPdf}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-black text-black bg-gold-gradient hover:brightness-110 active:scale-95 transition-all shadow cursor-pointer"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    <span>JPG</span>
+                  </button>
+
+                  <div className="relative">
+                    <div className="inline-flex rounded-xl shadow">
+                      <button
+                        onClick={() => handleExportPdf(side === 'pvc' ? 'pvc' : side === 'back' ? 'back' : side === 'litter' ? 'litter' : side === 'both' ? 'both' : 'front')}
+                        disabled={isExportingPdf}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-l-xl text-xs font-black text-[#FFE885] bg-[#1F190D] border border-[#D4AF37] hover:bg-gold-gradient hover:text-black transition-all cursor-pointer"
+                        title="Descargar Certificado en formato PDF de alta resolución"
+                      >
+                        <FileDown className="w-3.5 h-3.5" />
+                        <span>PDF</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPdfMenuOpen(!pdfMenuOpen)}
+                        disabled={isExportingPdf}
+                        className="px-1.5 py-1.5 rounded-r-xl bg-[#2A2212] hover:bg-[#382D16] text-[#FFE885] border-t border-r border-b border-[#D4AF37] transition-all flex items-center justify-center cursor-pointer"
+                        title="Más opciones de reporte PDF"
+                      >
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {pdfMenuOpen && (
+                      <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-[#0F0F0F] border-2 border-[#D4AF37] shadow-2xl py-2 z-50 animate-fadeIn">
+                        <button
+                          onClick={() => handleExportPdf('dossier')}
+                          className="w-full text-left px-4 py-2.5 text-xs text-[#FFE885] hover:bg-[#251D0F] flex items-center gap-2.5 font-bold border-b border-neutral-800 transition-colors"
+                        >
+                          <Sparkles className="w-4 h-4 text-[#D4AF37] flex-shrink-0" />
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-white">Dossier y Reporte Notariado</span>
+                              <span className="text-[9px] px-1.5 py-0.2 bg-gold-gradient text-black rounded font-black">3 PÁGS</span>
+                            </div>
+                            <span className="text-[10px] text-neutral-400 font-normal block leading-tight">
+                              Frente + Genograma 4 Gen + Dictamen Notariado
+                            </span>
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => handleExportPdf('both')}
+                          className="w-full text-left px-4 py-2.5 text-xs text-neutral-200 hover:bg-[#1E190E] hover:text-[#FFE885] flex items-center gap-2.5 font-bold transition-colors"
+                        >
+                          <Layers className="w-4 h-4 text-[#D4AF37] flex-shrink-0" />
+                          <div>
+                            <span>PDF Doble Cara (Frente + Reverso)</span>
+                            <span className="text-[10px] text-neutral-400 font-normal block">Recomendado para impresión oficial</span>
+                          </div>
+                        </button>
+
+                        <div className="border-t border-neutral-800 my-1" />
+
+                        <button
+                          onClick={() => handleExportPdf('front')}
+                          className="w-full text-left px-4 py-2 text-xs text-neutral-200 hover:bg-[#1E190E] hover:text-[#FFE885] flex items-center gap-2.5 transition-colors"
+                        >
+                          <FileText className="w-4 h-4 text-[#D4AF37] flex-shrink-0" />
+                          <span>PDF Solo Frente Oficial</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleExportPdf('back')}
+                          className="w-full text-left px-4 py-2 text-xs text-neutral-200 hover:bg-[#1E190E] hover:text-[#FFE885] flex items-center gap-2.5 transition-colors"
+                        >
+                          <Award className="w-4 h-4 text-[#D4AF37] flex-shrink-0" />
+                          <span>PDF Solo Genograma (4 Generaciones)</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleExportPdf('litter')}
+                          className="w-full text-left px-4 py-2 text-xs text-neutral-200 hover:bg-[#1E190E] hover:text-[#FFE885] flex items-center gap-2.5 transition-colors"
+                        >
+                          <Baby className="w-4 h-4 text-[#D4AF37] flex-shrink-0" />
+                          <span>PDF Registro Oficial de Camada</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => handlePrint(side)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold text-neutral-200 bg-[#1A1A1A] border border-neutral-700 hover:text-white hover:border-[#D4AF37] cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Imprimir</span>
+                  </button>
+                </>
+              )}
+
+              <button
+                onClick={onClose}
+                className="p-1.5 rounded-xl text-neutral-400 hover:text-white hover:bg-neutral-800 cursor-pointer"
+                aria-label="Cerrar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
-          {/* Quick Actions (Orientation, Drag Toggle, Export) */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Orientación Vertical / Horizontal */}
-            <div className="flex items-center bg-[#0C0B08] border border-[#D4AF37]/60 rounded-xl p-0.5 shadow">
+          {/* Fila 2: Barra única deslizable de vistas del documento y orientación */}
+          <div className="px-3 py-2 sm:px-4 flex items-center justify-between gap-2 overflow-x-auto bg-[#0D0B08]">
+            <div className="flex items-center gap-1 whitespace-nowrap shrink-0">
               <button
-                type="button"
-                onClick={() => handleOrientationChange('vertical')}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  orientation === 'vertical'
-                    ? 'bg-gold-gradient text-black font-black shadow-md'
-                    : 'text-neutral-400 hover:text-white'
+                onClick={() => setSide('front')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  side === 'front' ? 'bg-gold-gradient text-black font-black shadow' : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
                 }`}
-                title="Formato Vertical (Tamaño Carta / A4)"
               >
-                <span>Vertical (Carta / A4)</span>
+                <FileText className="w-3.5 h-3.5" />
+                <span>1. Frente</span>
               </button>
+
               <button
-                type="button"
-                onClick={() => handleOrientationChange('horizontal')}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  orientation === 'horizontal'
-                    ? 'bg-gold-gradient text-black font-black shadow-md'
-                    : 'text-neutral-400 hover:text-white'
+                onClick={() => setSide('back')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  side === 'back' ? 'bg-gold-gradient text-black font-black shadow' : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
                 }`}
-                title="Formato Horizontal (A4)"
               >
-                <span>Horizontal (A4)</span>
+                <Award className="w-3.5 h-3.5" />
+                <span>2. Reverso (4G)</span>
+              </button>
+
+              <button
+                onClick={() => setSide('litter')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  side === 'litter' ? 'bg-gold-gradient text-black font-black shadow' : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+                }`}
+              >
+                <Baby className="w-3.5 h-3.5" />
+                <span>3. Camada</span>
+              </button>
+
+              <button
+                onClick={() => setSide('both')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  side === 'both' ? 'bg-gold-gradient text-black font-black shadow' : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Doble Cara</span>
+              </button>
+
+              <button
+                onClick={() => setSide('tree')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  side === 'tree' ? 'bg-gold-gradient text-black font-black shadow' : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+                }`}
+              >
+                <Dna className="w-3.5 h-3.5" />
+                <span>4. Árbol 4G</span>
+              </button>
+
+              <button
+                onClick={() => setSide('pvc')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  side === 'pvc' ? 'bg-gold-gradient text-black font-black shadow' : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+                }`}
+              >
+                <CreditCard className="w-3.5 h-3.5" />
+                <span>5. Credencial PVC</span>
               </button>
             </div>
 
-            {/* Direct Microchip QR Verification Link Button */}
-            <a
-              href={getMicrochipVerificationUrl(dog)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-[#14120D] border border-emerald-500/50 text-emerald-400 hover:bg-emerald-950/40 hover:border-emerald-400 cursor-pointer shadow transition-all"
-              title={`Escanear o abrir vista pública de verificación para el microchip ${dog.microchip} en INBR`}
-            >
-              <QrCode className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden md:inline">Verificar Microchip:</span>
-              <span className="font-mono">{dog.microchip || dog.regNumber}</span>
-            </a>
-
-            {/* Drag & Drop Toggle (Master Admin) */}
-            {isMasterAdmin && (
-              <button
-                type="button"
-                onClick={() => setIsEditMode(!isEditMode)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                  isEditMode
-                    ? 'bg-emerald-500 text-black shadow-lg ring-2 ring-emerald-300'
-                    : 'bg-[#1E180E] border border-[#D4AF37] text-[#FFE885] hover:bg-[#2A2214]'
-                }`}
-                title="Activar para mover textos, logos y campos directamente con el ratón"
-              >
-                <Move className="w-3.5 h-3.5" />
-                <span>{isEditMode ? '✓ Mover Mouse ACTIVO' : 'Mover con Mouse (Drag)'}</span>
-              </button>
-            )}
-
-            {/* Recuperar Logo (si se movió o no se encuentra) */}
-            {isMasterAdmin && isEditMode && (
-              <button
-                type="button"
-                onClick={handleRecoverLogo}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-[#FFE885] bg-[#1E190E] border border-[#D4AF37] hover:bg-[#2F2613] hover:scale-105 active:scale-95 transition-all shadow cursor-pointer"
-                title="Recuperar y centrar el logo en la hoja si se movió o no se encuentra"
-              >
-                <Crosshair className="w-3.5 h-3.5 text-[#FFE885]" />
-                <span>🎯 Recuperar Logo</span>
-              </button>
-            )}
-
-            {/* Si no tiene permisos de impresión/descarga (público general/clientes), mostrar badge informativo */}
-            {!canDownloadOrPrint && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/70 border border-[#D4AF37]/50 text-[#FFE885] text-xs font-mono shadow-inner">
-                <Lock className="w-3.5 h-3.5 text-[#D4AF37]" />
-                <span className="hidden sm:inline">Solo Visualización Oficial • Impresión Reservada</span>
-                <span className="sm:hidden">Solo Lectura</span>
+            {side !== 'pvc' && side !== 'tree' && (
+              <div className="flex items-center bg-[#080808] border border-[#D4AF37]/50 rounded-lg p-0.5 shrink-0 whitespace-nowrap">
+                <button
+                  type="button"
+                  onClick={() => handleOrientationChange('vertical')}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                    orientation === 'vertical'
+                      ? 'bg-gold-gradient text-black font-black shadow'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  Vertical
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOrientationChange('horizontal')}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                    orientation === 'horizontal'
+                      ? 'bg-gold-gradient text-black font-black shadow'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  Horizontal
+                </button>
               </div>
             )}
-
-            {/* Acciones de descarga e impresión exclusivas para Directiva / Representantes autorizados */}
-            {canDownloadOrPrint && (
-              <>
-                {/* Generar JPG */}
-                <button
-                  onClick={() => handleExportJpg(side === 'litter' ? 'litter' : side === 'back' ? 'back' : 'front')}
-                  disabled={isExportingPdf}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black text-black bg-gold-gradient hover:brightness-110 active:scale-95 transition-all shadow-md cursor-pointer"
-                >
-                  <ImageIcon className="w-4 h-4" />
-                  <span className="hidden sm:inline">Generar JPG</span>
-                  <span className="sm:hidden">JPG</span>
-                </button>
-
-                {/* PDF Dropdown */}
-                <div className="relative">
-                  <div className="inline-flex rounded-xl shadow-lg">
-                    <button
-                      onClick={() => handleExportPdf(side === 'pvc' ? 'pvc' : side === 'back' ? 'back' : side === 'litter' ? 'litter' : side === 'both' ? 'both' : 'front')}
-                      disabled={isExportingPdf}
-                      className="flex items-center gap-2 px-3.5 py-2 rounded-l-xl text-xs font-black text-[#FFE885] bg-[#1F190D] border border-[#D4AF37] hover:bg-gold-gradient hover:text-black active:scale-95 transition-all cursor-pointer shadow-md"
-                      title="Descargar Certificado en formato PDF de alta resolución"
-                    >
-                      <FileDown className="w-4 h-4" />
-                      <span className="hidden md:inline">
-                        Descargar PDF ({side === 'both' ? 'Doble Cara' : side === 'front' ? 'Frente' : side === 'back' ? 'Genograma' : side === 'pvc' ? 'Credencial PVC' : 'Camada'})
-                      </span>
-                      <span className="md:hidden">PDF</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPdfMenuOpen(!pdfMenuOpen)}
-                      disabled={isExportingPdf}
-                      className="px-2 py-2 rounded-r-xl bg-[#2A2212] hover:bg-[#382D16] text-[#FFE885] border-t border-r border-b border-[#D4AF37] transition-all flex items-center justify-center cursor-pointer"
-                      title="Más opciones de reporte PDF"
-                    >
-                      <ChevronDown className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {pdfMenuOpen && (
-                    <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-[#0F0F0F] border-2 border-[#D4AF37] shadow-2xl py-2 z-50 animate-fadeIn">
-                      <button
-                        onClick={() => handleExportPdf('dossier')}
-                        className="w-full text-left px-4 py-2.5 text-xs text-[#FFE885] hover:bg-[#251D0F] flex items-center gap-2.5 font-bold border-b border-neutral-800 transition-colors"
-                      >
-                        <Sparkles className="w-4 h-4 text-[#D4AF37] flex-shrink-0" />
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-white">Dossier y Reporte Notariado</span>
-                            <span className="text-[9px] px-1.5 py-0.2 bg-gold-gradient text-black rounded font-black">3 PÁGS</span>
-                          </div>
-                          <span className="text-[10px] text-neutral-400 font-normal block leading-tight">
-                            Frente + Genograma 4 Gen + Dictamen Notariado
-                          </span>
-                        </div>
-                      </button>
-
-                      <button
-                        onClick={() => handleExportPdf('both')}
-                        className="w-full text-left px-4 py-2.5 text-xs text-neutral-200 hover:bg-[#1E190E] hover:text-[#FFE885] flex items-center gap-2.5 font-bold transition-colors"
-                      >
-                        <Layers className="w-4 h-4 text-[#D4AF37] flex-shrink-0" />
-                        <div>
-                          <span>PDF Doble Cara (Frente + Reverso)</span>
-                          <span className="text-[10px] text-neutral-400 font-normal block">Recomendado para impresión oficial</span>
-                        </div>
-                      </button>
-
-                      <div className="border-t border-neutral-800 my-1" />
-
-                      <button
-                        onClick={() => handleExportPdf('front')}
-                        className="w-full text-left px-4 py-2 text-xs text-neutral-200 hover:bg-[#1E190E] hover:text-[#FFE885] flex items-center gap-2.5 transition-colors"
-                      >
-                        <FileText className="w-4 h-4 text-[#D4AF37] flex-shrink-0" />
-                        <span>PDF Solo Frente Oficial</span>
-                      </button>
-
-                      <button
-                        onClick={() => handleExportPdf('back')}
-                        className="w-full text-left px-4 py-2 text-xs text-neutral-200 hover:bg-[#1E190E] hover:text-[#FFE885] flex items-center gap-2.5 transition-colors"
-                      >
-                        <Award className="w-4 h-4 text-[#D4AF37] flex-shrink-0" />
-                        <span>PDF Solo Genograma (4 Generaciones)</span>
-                      </button>
-
-                      <button
-                        onClick={() => handleExportPdf('litter')}
-                        className="w-full text-left px-4 py-2 text-xs text-neutral-200 hover:bg-[#1E190E] hover:text-[#FFE885] flex items-center gap-2.5 transition-colors"
-                      >
-                        <Baby className="w-4 h-4 text-[#D4AF37] flex-shrink-0" />
-                        <span>PDF Registro Oficial de Camada</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Imprimir */}
-                <button
-                  onClick={() => handlePrint(side)}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-neutral-200 bg-[#1A1A1A] border border-neutral-700 hover:text-white hover:border-[#D4AF37] cursor-pointer"
-                >
-                  <Printer className="w-4 h-4" />
-                  <span className="hidden sm:inline">Imprimir</span>
-                </button>
-              </>
-            )}
-
-            {/* Cerrar */}
-            <button
-              onClick={onClose}
-              className="p-2 rounded-xl text-neutral-400 hover:text-white hover:bg-neutral-800 cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
           </div>
         </div>
 
-        {/* ADMIN TOOLBAR: Personalización de Fondos, Toggles de Foto/Sellos y Guardar en Supabase */}
-        {isMasterAdmin && (
-          <div className="no-print p-3 sm:p-3.5 bg-[#100D08] border-b border-[#D4AF37] flex flex-wrap items-center justify-between gap-3 text-xs">
+        {/* ADMIN TOOLBAR RETRÁCTIL: Solo visible al abrir Personalizar o Modo Mover */}
+        {isMasterAdmin && (showCustomTools || isEditMode) && (
+          <div className="no-print p-3 bg-[#100D08] border-b border-[#D4AF37] flex flex-wrap items-center justify-between gap-2.5 text-xs animate-fadeIn">
             {/* Toggles de Contenido & Fondos */}
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[#FFE885] font-bold font-mono">Personalización:</span>
@@ -1427,17 +1434,25 @@ export const PedigreeCertificateModal: React.FC<PedigreeCertificateModalProps> =
                 </span>
               )}
 
-              {isEditMode && (
-                <button
-                  type="button"
-                  onClick={handleResetAllOffsets}
-                  className="px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-medium flex items-center gap-1"
-                  title="Restablecer todas las coordenadas a 0"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>Restablecer</span>
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleRecoverLogo}
+                className="px-2.5 py-1 rounded bg-[#1E190E] border border-[#D4AF37]/70 text-[#FFE885] font-bold flex items-center gap-1 cursor-pointer"
+                title="Centrar logotipo INBR"
+              >
+                <Crosshair className="w-3 h-3" />
+                <span>Centrar Logo</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleResetAllOffsets}
+                className="px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-bold flex items-center gap-1 cursor-pointer"
+                title="Acomodar todos los campos a sus posiciones limpias sin encimamientos"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Acomodar Certificado (Reset 0)</span>
+              </button>
 
               <button
                 type="button"
@@ -1445,7 +1460,7 @@ export const PedigreeCertificateModal: React.FC<PedigreeCertificateModalProps> =
                 className="px-3.5 py-1 rounded-lg bg-gold-gradient text-black font-black hover:brightness-110 shadow flex items-center gap-1.5 cursor-pointer"
               >
                 <Save className="w-3.5 h-3.5" />
-                <span>Guardar Coordenadas en Supabase</span>
+                <span>Guardar en Supabase</span>
               </button>
             </div>
           </div>
@@ -1465,7 +1480,7 @@ export const PedigreeCertificateModal: React.FC<PedigreeCertificateModalProps> =
                 }
               }}
               onDrop={handleCanvasDrop}
-              className={`text-black relative overflow-hidden transition-all print-full-width ${
+              className={`text-black relative overflow-hidden transition-all print-full-width flex flex-col ${
                 orientation === 'vertical'
                   ? 'w-full max-w-[800px] min-h-[1130px] p-8 sm:p-12'
                   : 'w-full max-w-[1120px] min-h-[790px] p-8 sm:p-12'
@@ -1511,11 +1526,11 @@ export const PedigreeCertificateModal: React.FC<PedigreeCertificateModalProps> =
                 </div>
               )}
 
-              {/* Contenedor Interior Limpio: SIN marcos transparentes ni franjas blanquizcas */}
-              <div className="relative z-10 flex flex-col justify-between h-full min-h-[700px]">
+              {/* Contenedor Interior Limpio: flex-1 asegura footer de firma siempre hasta abajo */}
+              <div className="relative z-10 flex-1 flex flex-col justify-between gap-6">
                 
                 {/* Header Frente */}
-                <div className="text-center pb-4 relative">
+                <div className="text-center pb-4 relative z-10 shrink-0">
                   {showLogo && (
                     <DraggableField 
                       fieldKey="logoOffset" 
@@ -1546,7 +1561,7 @@ export const PedigreeCertificateModal: React.FC<PedigreeCertificateModalProps> =
                 </div>
 
                 {/* Canine Main Details */}
-                <div className="grid gap-6 items-center py-4 grid-cols-12">
+                <div className="grid gap-6 items-center py-4 grid-cols-12 relative z-10 my-auto">
                   {/* Canine Photo & QR (Opcional según showPhoto) */}
                   {showPhoto ? (
                     <div className="col-span-12 sm:col-span-4 flex flex-col items-center text-center space-y-3">
@@ -1669,8 +1684,8 @@ export const PedigreeCertificateModal: React.FC<PedigreeCertificateModalProps> =
                   </div>
                 </div>
 
-                {/* Footer Frente: Firmas y Sellos Notariados */}
-                <div className="pt-4 flex flex-wrap items-center justify-between text-xs text-neutral-600 gap-4">
+                {/* Footer Frente: Firmas y Sellos Notariados siempre al pie del documento */}
+                <div className="mt-auto pt-6 border-t border-neutral-300/70 flex flex-wrap items-end justify-between text-xs text-neutral-600 gap-4 relative z-20 shrink-0">
                   {showNotarySeal ? (
                     <DraggableField fieldKey="sealOffset" label="Sello Notarial">
                       <div className="flex items-center gap-3">
@@ -1689,11 +1704,11 @@ export const PedigreeCertificateModal: React.FC<PedigreeCertificateModalProps> =
                     </DraggableField>
                   ) : <div />}
 
-                  <DraggableField fieldKey="dateOffset" label="Firma Notarial" className="text-right">
-                    <div className="font-serif italic font-bold text-sm text-[#1A1A1A]">
+                  <DraggableField fieldKey="dateOffset" label="Firma Notarial" className="text-right relative z-20">
+                    <div className="font-serif italic font-bold text-base text-[#1A1A1A] leading-tight">
                       Jonathan García
                     </div>
-                    <span className="text-[9px] uppercase tracking-wider text-neutral-500 font-mono block">
+                    <span className="text-[9px] uppercase tracking-wider text-neutral-600 font-mono block border-t border-neutral-300 pt-1 mt-1">
                       Presidente / CEO Notario INBR
                     </span>
                   </DraggableField>
@@ -1717,7 +1732,7 @@ export const PedigreeCertificateModal: React.FC<PedigreeCertificateModalProps> =
                 }
               }}
               onDrop={handleCanvasDrop}
-              className={`text-black relative overflow-hidden transition-all print-full-width ${
+              className={`text-black relative overflow-hidden transition-all print-full-width flex flex-col ${
                 orientation === 'vertical'
                   ? 'w-full max-w-[800px] min-h-[1130px] p-6 sm:p-10'
                   : 'w-full max-w-[1120px] min-h-[790px] p-6 sm:p-10'
@@ -1764,7 +1779,7 @@ export const PedigreeCertificateModal: React.FC<PedigreeCertificateModalProps> =
               )}
 
               {/* Contenedor Interior Limpio: SIN franjas negras ni recuadros blanquizcos que tapen el papel */}
-              <div className="relative z-10 flex flex-col justify-between h-full min-h-[720px]">
+              <div className="relative z-10 flex-1 flex flex-col justify-between gap-4">
                 
                 {/* Header Reverso: Título y Datos Principales */}
                 <div className="flex flex-wrap items-start justify-between pb-3 border-b border-neutral-300/80 gap-3">
@@ -1969,7 +1984,7 @@ export const PedigreeCertificateModal: React.FC<PedigreeCertificateModalProps> =
                 }
               }}
               onDrop={handleCanvasDrop}
-              className={`text-black relative overflow-hidden transition-all print-full-width ${
+              className={`text-black relative overflow-hidden transition-all print-full-width flex flex-col ${
                 orientation === 'vertical'
                   ? 'w-full max-w-[800px] min-h-[1130px] p-6 sm:p-10'
                   : 'w-full max-w-[1120px] min-h-[790px] p-6 sm:p-10'
@@ -2016,7 +2031,7 @@ export const PedigreeCertificateModal: React.FC<PedigreeCertificateModalProps> =
               )}
 
               {/* Contenedor Interior Limpio */}
-              <div className="relative z-10 flex flex-col justify-between h-full min-h-[720px] space-y-4">
+              <div className="relative z-10 flex-1 flex flex-col justify-between gap-4">
                 
                 {/* Header Camada */}
                 <div className="flex items-start justify-between border-b border-neutral-300 pb-3 gap-3">
@@ -2062,16 +2077,16 @@ export const PedigreeCertificateModal: React.FC<PedigreeCertificateModalProps> =
                   <DraggableField fieldKey="litterMotherOffset" label="Datos Madre">
                     <div>
                       <span className="text-[9px] uppercase font-bold text-neutral-500 block font-mono">MADRE / DAM:</span>
-                      <strong className="text-black text-sm block">{dog.dam || 'MADRE REGISTRADA'}</strong>
-                      <span className="text-neutral-500 font-mono text-[10px] block">REG: {dog.damReg || 'INBR-00192'}</span>
+                      <strong className="text-black text-sm block">{pedigree.dam.name}</strong>
+                      <span className="text-neutral-500 font-mono text-[10px] block">REG: {pedigree.dam.regNumber}</span>
                     </div>
                   </DraggableField>
 
                   <DraggableField fieldKey="litterFatherOffset" label="Datos Padre">
                     <div>
                       <span className="text-[9px] uppercase font-bold text-neutral-500 block font-mono">PADRE / SIRE:</span>
-                      <strong className="text-black text-sm block">{dog.sire || 'PADRE REGISTRADO'}</strong>
-                      <span className="text-neutral-500 font-mono text-[10px] block">REG: {dog.sireReg || 'INBR-84920'}</span>
+                      <strong className="text-black text-sm block">{pedigree.sire.name}</strong>
+                      <span className="text-neutral-500 font-mono text-[10px] block">REG: {pedigree.sire.regNumber}</span>
                     </div>
                   </DraggableField>
 

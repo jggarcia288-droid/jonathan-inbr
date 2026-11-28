@@ -19,6 +19,7 @@ import {
   FileSpreadsheet,
   Rocket
 } from 'lucide-react';
+import { useDynamicContent } from '../../utils/dynamicContent';
 
 export type AdminTabKey = 
   | 'visual_editor'
@@ -61,6 +62,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   pendingVouchersCount = 0,
   activityLogsCount = 0,
 }) => {
+  const { content } = useDynamicContent();
+  const logoSrc = content.siteLogoUrl || '/logo-inbr.jpg';
   const navSections = [
     {
       group: 'GESTIÓN Y DISEÑO',
@@ -237,7 +240,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           {!isCollapsed ? (
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-8 h-8 rounded-full border border-[#D4AF37] p-0.5 bg-black overflow-hidden shrink-0 shadow">
-                <img src="/logo-inbr.jpg" alt="Logo" className="w-full h-full object-cover rounded-full" />
+                <img src={logoSrc} alt="Logo" className="w-full h-full object-cover rounded-full" onError={(e) => { e.currentTarget.src = '/logo-inbr.jpg'; }} />
               </div>
               <div className="min-w-0">
                 <span className="text-[11px] font-black tracking-wider text-gold-gradient uppercase block truncate leading-tight font-serif-luxury">
@@ -250,7 +253,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             </div>
           ) : (
             <div className="mx-auto w-8 h-8 rounded-full border border-[#D4AF37] p-0.5 bg-black overflow-hidden shadow">
-              <img src="/logo-inbr.jpg" alt="Logo" className="w-full h-full object-cover rounded-full" />
+              <img src={logoSrc} alt="Logo" className="w-full h-full object-cover rounded-full" onError={(e) => { e.currentTarget.src = '/logo-inbr.jpg'; }} />
             </div>
           )}
 

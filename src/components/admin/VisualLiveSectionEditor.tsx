@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useDynamicContent, uploadCmsImage, saveDynamicContentAsync, DynamicBreedCardItem } from '../../utils/dynamicContent';
+import { BREED_IMAGES } from '../../utils/breedImages';
 import { addActivityLog } from '../../utils/activityLogs';
 import confetti from 'canvas-confetti';
 import { 
@@ -46,16 +47,16 @@ export const VisualLiveSectionEditor: React.FC<VisualLiveSectionEditorProps> = (
           subtitle: 'Compañero Supremo y Estructura Muscular',
           description: 'Perro compacto, potente, con gran osamenta, temperamento afable y equilibrio biomecánico.',
           varieties: ['Pocket', 'Standard', 'Classic', 'XL'],
-          image: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=700&q=80',
+          image: BREED_IMAGES.americanBully,
         },
         {
-          id: 'exotic-bully',
-          name: 'Exotic Bully',
+          id: 'exotic-bull',
+          name: 'Exotic Bull',
           category: 'bull',
-          subtitle: 'Fenotipo Extremo y Agilidad Preservada',
+          subtitle: 'Fenotipo Compacto y Agilidad Preservada',
           description: 'Evolución morfológica con máxima compactación, densidad ósea y apego al protocolo de salud INBR.',
-          varieties: ['Micro', 'Clean Exotic', 'Nano'],
-          image: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=700&q=80',
+          varieties: ['Micro', 'Nano Bull', 'Exotic Standard'],
+          image: BREED_IMAGES.exoticBull,
         },
       ];
 
@@ -80,7 +81,7 @@ export const VisualLiveSectionEditor: React.FC<VisualLiveSectionEditorProps> = (
       subtitle: 'Subtítulo Descriptivo de la Raza',
       description: 'Ingresa aquí las características morfológicas, temperamento y estándar oficial de esta raza...',
       varieties: ['Estándar Oficial'],
-      image: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=700&q=80',
+      image: BREED_IMAGES.americanBully,
     };
     updateContent({ bullBreedsList: [...breedsList, newBreed] });
   };
@@ -205,7 +206,7 @@ export const VisualLiveSectionEditor: React.FC<VisualLiveSectionEditorProps> = (
             { id: 'breeds', label: '🐕 Nuestras Razas Oficiales (Multi-Razas)' },
             { id: 'hero', label: '👑 Portada & Hero Principal' },
             { id: 'about', label: '🏢 Quiénes Somos & Misión' },
-            { id: 'certificaciones', label: '📜 Certificaciones Notariales' },
+            { id: 'certifications', label: '📜 Certificaciones Notariales' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -286,6 +287,7 @@ export const VisualLiveSectionEditor: React.FC<VisualLiveSectionEditorProps> = (
                     <img
                       src={breed.image}
                       alt={breed.name}
+                      referrerPolicy="no-referrer"
                       className="w-full h-full object-cover"
                     />
                   ) : (

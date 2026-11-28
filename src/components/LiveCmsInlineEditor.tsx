@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useDynamicContent, uploadCmsImage, saveDynamicContentAsync } from '../utils/dynamicContent';
+import { BREED_IMAGES } from '../utils/breedImages';
 import { addActivityLog } from '../utils/activityLogs';
 import { useAuth } from '../hooks/useAuth';
 import confetti from 'canvas-confetti';
@@ -245,7 +246,7 @@ export const LiveCmsInlineEditor: React.FC<LiveCmsInlineEditorProps> = ({ onOpen
       subtitle: 'Subtítulo o Características',
       description: 'Descripción morfológica oficial y estándar de la raza...',
       varieties: ['Estándar Oficial'],
-      image: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=700&q=80',
+      image: BREED_IMAGES.americanBully,
     };
     updateContent({ bullBreedsList: [...current, newBreed] });
   };
@@ -637,6 +638,51 @@ export const LiveCmsInlineEditor: React.FC<LiveCmsInlineEditorProps> = ({ onOpen
                       onChange={(e) => handleFieldChange('bannerNotice', e.target.value)}
                       className="w-full px-3.5 py-2.5 rounded-xl bg-black border border-neutral-700 text-white focus:border-[#D4AF37]"
                     />
+                  </div>
+
+                  {/* Official Site Logo Replacement */}
+                  <div className="p-4 rounded-2xl bg-black/60 border border-[#D4AF37]/50 space-y-2.5">
+                    <span className="text-[10px] font-mono uppercase font-bold text-[#FFE885] block">
+                      Logotipo Oficial INBR (Encabezado y Portada):
+                    </span>
+                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                      <img
+                        src={content.siteLogoUrl || '/logo-inbr.jpg'}
+                        alt="Logo INBR Preview"
+                        className="w-20 h-20 object-cover rounded-full border-2 border-[#D4AF37] bg-black"
+                        onError={(e) => {
+                          e.currentTarget.src = '/logo-inbr.jpg';
+                        }}
+                      />
+                      <div className="flex-1 space-y-2 w-full">
+                        <input
+                          type="text"
+                          value={content.siteLogoUrl || ''}
+                          onChange={(e) => handleFieldChange('siteLogoUrl', e.target.value)}
+                          placeholder="URL del logotipo o sube tu archivo..."
+                          className="w-full px-3 py-1.5 rounded-xl bg-black border border-neutral-700 text-white font-mono text-xs"
+                        />
+                        <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gold-gradient text-black font-black text-xs hover:brightness-110 transition-all">
+                          {uploadingField === 'siteLogoUrl' ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Subiendo Logo...</span>
+                            </>
+                          ) : (
+                            <>
+                              <UploadCloud className="w-3.5 h-3.5" />
+                              <span>Subir Mi Logo Original</span>
+                            </>
+                          )}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => e.target.files?.[0] && handleImageUpload('siteLogoUrl', e.target.files[0])}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Hero Banner Image Replacement */}

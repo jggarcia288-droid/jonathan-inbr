@@ -228,7 +228,7 @@ export const RepresentativePanelModal: React.FC<RepresentativePanelModalProps> =
         representativeName: 'Delegación Oficial INBR Colombia',
         country: 'Colombia',
         dogName: 'Titan of Iron Blood',
-        breed: 'Exotic Bully',
+        breed: 'Exotic Bull',
         chip: '981098234812391',
         status: 'PENDIENTE',
         details: 'Homologación de registro previo UKC #UKC-88219. En revisión morfológica.',
@@ -1181,10 +1181,13 @@ export const RepresentativePanelModal: React.FC<RepresentativePanelModalProps> =
                       className="w-full px-3.5 py-2.5 rounded-xl bg-black border border-neutral-700 text-white text-xs font-semibold focus:border-[#D4AF37]"
                     >
                       <option value="American Bully">American Bully</option>
-                      <option value="Exotic Bully">Exotic Bully</option>
-                      <option value="Cane Corso Italiano">Cane Corso Italiano</option>
-                      <option value="Pastor Belga Malinois">Pastor Belga Malinois</option>
+                      <option value="Exotic Bull">Exotic Bull</option>
+                      <option value="Nano Bull">Nano Bull</option>
                       <option value="French Bulldog">French Bulldog</option>
+                      <option value="English Bulldog">English Bulldog</option>
+                      <option value="Cane Corso Italiano">Cane Corso Italiano</option>
+                      <option value="Pastor Alemán">Pastor Alemán</option>
+                      <option value="Pastor Belga Malinois">Pastor Belga Malinois</option>
                       <option value="Doberman Pinscher">Doberman Pinscher</option>
                       <option value="Rottweiler">Rottweiler</option>
                       <option value="American Pit Bull Terrier">American Pit Bull Terrier</option>
@@ -1826,10 +1829,13 @@ export const RepresentativePanelModal: React.FC<RepresentativePanelModalProps> =
                       className="w-full px-3.5 py-2.5 rounded-xl bg-black border border-neutral-700 text-white text-xs font-semibold focus:border-[#D4AF37]"
                     >
                       <option value="American Bully">American Bully</option>
-                      <option value="Exotic Bully">Exotic Bully</option>
-                      <option value="Cane Corso Italiano">Cane Corso Italiano</option>
-                      <option value="Pastor Belga Malinois">Pastor Belga Malinois</option>
+                      <option value="Exotic Bull">Exotic Bull</option>
+                      <option value="Nano Bull">Nano Bull</option>
                       <option value="French Bulldog">French Bulldog</option>
+                      <option value="English Bulldog">English Bulldog</option>
+                      <option value="Cane Corso Italiano">Cane Corso Italiano</option>
+                      <option value="Pastor Alemán">Pastor Alemán</option>
+                      <option value="Pastor Belga Malinois">Pastor Belga Malinois</option>
                       <option value="Doberman Pinscher">Doberman Pinscher</option>
                       <option value="Rottweiler">Rottweiler</option>
                       <option value="American Pit Bull Terrier">American Pit Bull Terrier</option>
@@ -2054,10 +2060,13 @@ export const RepresentativePanelModal: React.FC<RepresentativePanelModalProps> =
                       className="w-full px-3.5 py-2.5 rounded-xl bg-black border border-neutral-700 text-white text-xs font-semibold focus:border-[#D4AF37]"
                     >
                       <option value="American Bully">American Bully</option>
-                      <option value="Exotic Bully">Exotic Bully</option>
-                      <option value="Cane Corso Italiano">Cane Corso Italiano</option>
-                      <option value="Pastor Belga Malinois">Pastor Belga Malinois</option>
+                      <option value="Exotic Bull">Exotic Bull</option>
+                      <option value="Nano Bull">Nano Bull</option>
                       <option value="French Bulldog">French Bulldog</option>
+                      <option value="English Bulldog">English Bulldog</option>
+                      <option value="Cane Corso Italiano">Cane Corso Italiano</option>
+                      <option value="Pastor Alemán">Pastor Alemán</option>
+                      <option value="Pastor Belga Malinois">Pastor Belga Malinois</option>
                       <option value="Doberman Pinscher">Doberman Pinscher</option>
                       <option value="Rottweiler">Rottweiler</option>
                       <option value="American Pit Bull Terrier">American Pit Bull Terrier</option>

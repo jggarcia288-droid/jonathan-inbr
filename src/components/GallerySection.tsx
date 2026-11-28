@@ -157,6 +157,7 @@ export const GallerySection: React.FC = () => {
                 <img
                   src={photo.imageUrl}
                   alt={photo.title}
+                  referrerPolicy="no-referrer"
                   className="w-full h-full object-cover object-center group-hover:scale-110 transition-transform duration-700"
                   loading="lazy"
                 />
@@ -448,6 +449,7 @@ export const GallerySection: React.FC = () => {
               <img
                 src={activePhotoModal.imageUrl}
                 alt={activePhotoModal.title}
+                referrerPolicy="no-referrer"
                 className="max-h-[68vh] w-auto max-w-full object-contain rounded-2xl border border-neutral-800 shadow-2xl"
               />
             </div>

@@ -101,7 +101,7 @@ export const LitterApplicationPdfModal: React.FC<LitterApplicationPdfModalProps>
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/90 backdrop-blur-md overflow-y-auto animate-fadeIn print:p-0 print:bg-white">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-2 sm:p-4 bg-black/90 backdrop-blur-md overflow-y-auto animate-fadeIn print:p-0 print:bg-white">
       <div className="relative w-full max-w-4xl bg-[#0D0D0D] border-2 border-[#D4AF37] rounded-3xl shadow-[0_0_60px_rgba(212,175,55,0.4)] overflow-hidden my-4 flex flex-col print:border-none print:shadow-none print:bg-white">
         {/* Header Bar */}
         <div className="p-4 bg-[#14120D] border-b border-[#D4AF37]/40 flex flex-wrap items-center justify-between gap-3 no-print">

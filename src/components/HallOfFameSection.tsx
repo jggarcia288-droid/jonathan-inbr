@@ -58,6 +58,7 @@ export const HallOfFameSection: React.FC<HallOfFameSectionProps> = ({ onSelectDo
                   <img
                     src={content.hallOfFamePhoto1 || vulcan.imageUrl}
                     alt={vulcan.name}
+                    referrerPolicy="no-referrer"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                 </div>
@@ -126,6 +127,7 @@ export const HallOfFameSection: React.FC<HallOfFameSectionProps> = ({ onSelectDo
                   <img
                     src={content.hallOfFamePhoto2 || bella.imageUrl}
                     alt={bella.name}
+                    referrerPolicy="no-referrer"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                 </div>

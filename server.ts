@@ -32,8 +32,8 @@ Conocimientos clave de INBR:
    - American Bully Standard: Machos de 43 a 51 cm; hembras de 40 a 48 cm.
    - American Bully Classic: Mismas medidas que Standard pero con menor masa muscular y estructura más ligera tradicional.
    - American Bully XL: Machos mayores a 51 cm hasta 57 cm; hembras de 48 a 54 cm.
-   - Exotic Bully: Ejemplar de dimensiones reducidas y extrema expresión muscular y tipicidad exótica.
-   - Otras razas reconocidas: American Pit Bull Terrier, French Bulldog, Cane Corso, Shorty Bull, etc.
+   - Exotic Bull: Ejemplar de dimensiones reducidas y extrema expresión muscular y tipicidad exótica.
+   - Otras razas reconocidas: American Pit Bull Terrier, French Bulldog, Cane Corso, Pastor Alemán, Pastor Belga Malinois, etc.
 
 4. Soporte Técnico de la Plataforma:
    - Importación de bases de datos Excel (.xlsx) exclusiva en el Panel Maestro.

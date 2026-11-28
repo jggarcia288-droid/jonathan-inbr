@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from '../context/LanguageContext';
 import { useDynamicContent } from '../utils/dynamicContent';
+import { BREED_IMAGES } from '../utils/breedImages';
 import { Layers, BookOpen, Sparkles, Filter, ShieldCheck, ArrowLeft } from 'lucide-react';
 
 interface MultiBreedsSectionProps {
@@ -30,34 +31,16 @@ export const BullBreedsSection: React.FC<MultiBreedsSectionProps> = ({ onSelectB
       subtitle: 'Compañero Supremo y Estructura Muscular',
       description: 'Perro compacto, potente, con gran osamenta, temperamento afable y equilibrio biomecánico.',
       varieties: ['Pocket', 'Standard', 'Classic', 'XL'],
-      image: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=700&q=80',
+      image: BREED_IMAGES.americanBully,
     },
     {
-      id: 'exotic-bully',
-      name: 'Exotic Bully',
+      id: 'exotic-bull',
+      name: 'Exotic Bull',
       category: 'bull',
       subtitle: 'Fenotipo Extremo y Agilidad Preservada',
       description: 'Evolución morfológica con máxima compactación, densidad ósea y apego al protocolo de salud INBR.',
-      varieties: ['Micro', 'Clean Exotic', 'Nano'],
-      image: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=700&q=80',
-    },
-    {
-      id: 'cane-corso',
-      name: 'Cane Corso Italiano',
-      category: 'guard',
-      subtitle: 'Moloso de Guardia y Protección Familiar',
-      description: 'Moloso potente, atlético y majestuoso. Mordida en ligero prognatismo, cuello musculoso y aplomos de gran firmeza.',
-      varieties: ['Negro', 'Gris Plomo', 'Leonado / Formentino'],
-      image: 'https://images.unsplash.com/photo-1568572933382-74d440642117?auto=format&fit=crop&w=700&q=80',
-    },
-    {
-      id: 'pastor-belga-malinois',
-      name: 'Pastor Belga Malinois',
-      category: 'work',
-      subtitle: 'Trabajo Deportivo, K9 e Inteligencia Operativa',
-      description: 'Canino de trabajo con potencia de mordida, máxima agilidad, impulsos equilibrados y líneas de trabajo consagradas.',
-      varieties: ['Línea de Ring Francés', 'Mondioring', 'K9 Operativo'],
-      image: 'https://images.unsplash.com/photo-1588943211346-090881b5782a?auto=format&fit=crop&w=700&q=80',
+      varieties: ['Micro Bully', 'Nano Bull', 'Exotic'],
+      image: BREED_IMAGES.exoticBull,
     },
     {
       id: 'french-bulldog',
@@ -66,7 +49,43 @@ export const BullBreedsSection: React.FC<MultiBreedsSectionProps> = ({ onSelectB
       subtitle: 'Moloso Compacto de Compañía',
       description: 'Cuerpo compacto, orejas de murciélago, pecho ancho y excelente respiración con narinas abiertas.',
       varieties: ['Estándar Fawn/Brindle', 'Fluffy', 'Visual Isabella'],
-      image: 'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?auto=format&fit=crop&w=700&q=80',
+      image: BREED_IMAGES.frenchBulldog,
+    },
+    {
+      id: 'english-bulldog',
+      name: 'English Bulldog',
+      category: 'bull',
+      subtitle: 'Bulldog Inglés Oficial',
+      description: 'Cuerpo ancho, pecho bajo y hombros poderosos. Cabeza masiva simétrica y marcha cadenciosa.',
+      varieties: ['Show Classic', 'Tri-Color', 'Heavy Bone'],
+      image: BREED_IMAGES.englishBulldog,
+    },
+    {
+      id: 'cane-corso',
+      name: 'Cane Corso Italiano',
+      category: 'guard',
+      subtitle: 'Moloso de Guardia y Protección Familiar',
+      description: 'Moloso potente, atlético y majestuoso. Mordida en ligero prognatismo, cuello musculoso y aplomos de gran firmeza.',
+      varieties: ['Negro', 'Gris Plomo', 'Leonado / Formentino'],
+      image: BREED_IMAGES.caneCorso,
+    },
+    {
+      id: 'pastor-aleman',
+      name: 'Pastor Alemán',
+      category: 'work',
+      subtitle: 'Trabajo, Guardia e Inteligencia Cinológica',
+      description: 'Perro pastor equilibrado, seguro de sí mismo, sumamente versátil en trabajo K9, obediencia y conformación oficial.',
+      varieties: ['Línea de Trabajo', 'Línea de Belleza', 'Negro y Fuego'],
+      image: BREED_IMAGES.pastorAleman,
+    },
+    {
+      id: 'pastor-belga-malinois',
+      name: 'Pastor Belga Malinois',
+      category: 'work',
+      subtitle: 'Trabajo Deportivo, K9 e Inteligencia Operativa',
+      description: 'Canino de trabajo con potencia de mordida, máxima agilidad, impulsos equilibrados y líneas de trabajo consagradas.',
+      varieties: ['Línea de Ring Francés', 'Mondioring', 'K9 Operativo'],
+      image: BREED_IMAGES.pastorBelgaMalinois,
     },
     {
       id: 'doberman',
@@ -75,7 +94,7 @@ export const BullBreedsSection: React.FC<MultiBreedsSectionProps> = ({ onSelectB
       subtitle: 'Elegancia, Firmeza y Máximo Carácter',
       description: 'Silueta esculpida, porte noble y lealtad incondicional. Excelente dorso firme y trote amplio elástico.',
       varieties: ['Línea Europea', 'Línea Americana'],
-      image: 'https://images.unsplash.com/photo-1601758228041-f3b2795255f1?auto=format&fit=crop&w=700&q=80',
+      image: BREED_IMAGES.doberman,
     },
     {
       id: 'rottweiler',
@@ -84,7 +103,7 @@ export const BullBreedsSection: React.FC<MultiBreedsSectionProps> = ({ onSelectB
       subtitle: 'Potencia, Determinación y Estructura Robusta',
       description: 'Canino de origen germano con cabeza potente, marcas de fuego delimitadas y temperamento equilibrado.',
       varieties: ['Línea ADRK', 'Línea de Belleza Internacional'],
-      image: 'https://images.unsplash.com/photo-1567752881298-894bb81f9379?auto=format&fit=crop&w=700&q=80',
+      image: BREED_IMAGES.rottweiler,
     },
     {
       id: 'american-pit-bull',
@@ -92,8 +111,8 @@ export const BullBreedsSection: React.FC<MultiBreedsSectionProps> = ({ onSelectB
       category: 'bull',
       subtitle: 'Raza Atlética de Rendimiento Histórico',
       description: 'Musculatura magra, impulsión posterior sobresaliente y tenacidad con enfoque deportivo oficial.',
-      varieties: ['Game Dog Tradicional', 'Conformación Deportiva'],
-      image: 'https://images.unsplash.com/photo-1576201836106-db1758fd1c97?auto=format&fit=crop&w=700&q=80',
+      varieties: ['Red Nose', 'Conformación Deportiva'],
+      image: BREED_IMAGES.apbt,
     },
   ];
 
@@ -178,6 +197,7 @@ export const BullBreedsSection: React.FC<MultiBreedsSectionProps> = ({ onSelectB
                 <img
                   src={breed.image}
                   alt={breed.name}
+                  referrerPolicy="no-referrer"
                   className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#12110D] via-transparent to-transparent" />

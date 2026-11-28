@@ -3,6 +3,7 @@ import { useTranslation } from '../context/LanguageContext';
 import { useRegistry } from '../context/RegistryContext';
 import { useAuth } from '../hooks/useAuth';
 import { DogRecord } from '../data/registryData';
+import { getBreedImageByIdOrName } from '../utils/breedImages';
 import { buildEightGenPedigree, EightGenPedigree } from '../utils/pedigreeResolver';
 import { InteractivePedigreeTree } from './InteractivePedigreeTree';
 import { 
@@ -49,7 +50,7 @@ import {
   Mail,
   ChevronDown,
   ChevronUp,
-  MoreVertical
+  Loader2
 } from 'lucide-react';
 
 interface FormsAndGenogramSectionProps {
@@ -62,7 +63,7 @@ export const FormsAndGenogramSection: React.FC<FormsAndGenogramSectionProps> = (
   onOpenAdminPanel 
 }) => {
   const { t } = useTranslation();
-  const { dogs, findDogByQuery } = useRegistry();
+  const { dogs, searchDogOnlineAndOffline } = useRegistry();
   const { user, isAuthenticated } = useAuth();
   
   // Available tabs: f1, permanent, homologation, litter, genogram
@@ -70,7 +71,7 @@ export const FormsAndGenogramSection: React.FC<FormsAndGenogramSectionProps> = (
   const [showRestrictedModal, setShowRestrictedModal] = useState(false);
   const [showBlankPdfBanner, setShowBlankPdfBanner] = useState(false);
   const [showBankInfo, setShowBankInfo] = useState(false);
-  const [mobileTabMenuOpen, setMobileTabMenuOpen] = useState(false);
+  const [isSearchingGenogram, setIsSearchingGenogram] = useState(false);
   const [isSectionExpanded, setIsSectionExpanded] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const h = window.location.hash.toLowerCase();
@@ -265,52 +266,58 @@ export const FormsAndGenogramSection: React.FC<FormsAndGenogramSectionProps> = (
   const [genogramMode, setGenogramMode] = useState<'interactive' | 'printable'>('interactive');
 
   const [builderData, setBuilderData] = useState({
-    name: 'TITAN BLOODLINE PROGENY',
+    name: 'EJEMPLAR EN CONSTRUCCIÓN',
     regNumber: 'INBR-GEN-2026',
     breed: 'American Bully',
     gender: 'Macho' as 'Macho' | 'Hembra',
-    color: 'Lilac Tri-Color',
-    microchip: '981098108429999',
-    sire: 'TAHONA 777',
-    dam: 'DIAMOND GIRL',
-    sireReg: 'INBR-777-TAHONA',
-    damReg: 'INBR-00192',
-    sireSire: 'TITAN BULLSEYE',
-    sireDam: 'LUNA ECLIPSE',
-    damSire: 'KRONOS GOLD',
-    damDam: 'ATHENA ROYAL',
+    color: 'Por definir',
+    microchip: '900000000000000',
+    sire: 'SIN REGISTRO',
+    dam: 'SIN REGISTRO',
+    sireReg: '—',
+    damReg: '—',
+    sireSire: 'SIN REGISTRO',
+    sireDam: 'SIN REGISTRO',
+    damSire: 'SIN REGISTRO',
+    damDam: 'SIN REGISTRO',
   });
 
   const builderDog = useMemo<DogRecord>(() => {
     return {
       regNumber: builderData.regNumber || 'INBR-GEN-2026',
-      microchip: builderData.microchip || '981098108429999',
+      microchip: builderData.microchip || '900000000000000',
       name: builderData.name || 'EJEMPLAR EN CONSTRUCCIÓN',
       breed: builderData.breed || 'American Bully',
       variety: 'Standard',
       gender: builderData.gender,
       dob: '2025-06-15',
-      color: builderData.color || 'Lilac Tri-Color',
+      color: builderData.color || 'Por definir',
       owner: 'Criadero Certificado INBR',
       breeder: 'INBR Bloodline',
       country: 'México',
-      sire: builderData.sire || 'PADRE NO REGISTRADO',
-      sireReg: builderData.sireReg || 'INBR-SIRE-PROV',
-      dam: builderData.dam || 'MADRE NO REGISTRADA',
-      damReg: builderData.damReg || 'INBR-DAM-PROV',
-      points: 150,
-      titles: ['CH-CANDIDATE'],
-      imageUrl: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=800&q=80',
+      sire: builderData.sire || 'SIN REGISTRO',
+      sireReg: builderData.sireReg || '—',
+      dam: builderData.dam || 'SIN REGISTRO',
+      damReg: builderData.damReg || '—',
+      points: 0,
+      titles: [],
+      imageUrl: getBreedImageByIdOrName(builderData.breed || ''),
       status: 'ACTIVE_VALIDATED',
     };
   }, [builderData]);
 
-  const handleSearchGenogram = (e: React.FormEvent) => {
+  const handleSearchGenogram = async (e: React.FormEvent) => {
     e.preventDefault();
+    const q = searchRegInput.trim();
     setHasSearchedGenogram(true);
-    if (!searchRegInput.trim()) return;
-    const found = findDogByQuery(searchRegInput.trim());
-    setSearchedDog(found || null);
+    if (!q) return;
+    setIsSearchingGenogram(true);
+    try {
+      const found = await searchDogOnlineAndOffline(q);
+      setSearchedDog(found || null);
+    } finally {
+      setIsSearchingGenogram(false);
+    }
   };
 
   const [isExportingGenogramJpg, setIsExportingGenogramJpg] = useState(false);
@@ -617,236 +624,101 @@ export const FormsAndGenogramSection: React.FC<FormsAndGenogramSectionProps> = (
           </button>
         </div>
 
-        {/* CONTENIDO EXPANDIBLE DE LA SECCIÓN */}
+        {/* CONTENIDO EXPANDIBLE DE LA SECCIÓN (SIN MENÚS ANIDADOS DE 3 FASES) */}
         {isSectionExpanded && (
-          <div className="space-y-6 animate-fadeIn">
-            {/* Navigation Return Bar */}
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
-              <a
-                href="#inicio"
-                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#14120D] border border-[#D4AF37]/50 text-xs font-bold text-[#FFE885] hover:bg-[#201A0E] transition-all hover:scale-105"
-                title="Regresar al Inicio"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>← Regresar al Inicio</span>
-              </a>
+          <div className="space-y-5 animate-fadeIn">
+            {/* Barra superior limpia: navegación + botones compactos de Formatos PDF y Datos Bancarios */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-neutral-800">
+              <div className="flex flex-wrap items-center gap-2">
+                <a
+                  href="#inicio"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#14120D] border border-[#D4AF37]/50 text-xs font-bold text-[#FFE885] hover:bg-[#201A0E] transition-all"
+                  title="Regresar al Inicio"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Inicio</span>
+                </a>
 
-              <div className="flex items-center gap-2">
                 <a
                   href="#verificacion"
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs font-medium text-neutral-300 hover:text-white transition-all"
-                  title="Ir a Verificación"
                 >
-                  <span>Verificación de Microchip →</span>
+                  <span>Verificación →</span>
                 </a>
               </div>
-            </div>
 
-        {/* ========================================================================= */}
-        {/* BANNER RETRÁCTIL DE DESCARGA DE FORMATOS EN BLANCO (MANUAL / PAQUETERÍA)  */}
-        {/* ========================================================================= */}
-        <div className="max-w-4xl mx-auto mb-6 rounded-2xl bg-gradient-to-r from-[#1C160B] via-[#12100A] to-[#1C160B] border-2 border-[#D4AF37] shadow-xl overflow-hidden transition-all">
-          <button
-            type="button"
-            onClick={() => setShowBlankPdfBanner(!showBlankPdfBanner)}
-            className="w-full p-3.5 sm:p-5 flex items-center justify-between gap-3 text-left hover:bg-[#251D0F]/50 transition-colors cursor-pointer"
-            aria-expanded={showBlankPdfBanner}
-            title={showBlankPdfBanner ? 'Contraer descarga de formatos en blanco' : 'Desplegar descarga de formatos en blanco'}
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-gold-gradient text-black flex items-center justify-center shrink-0 shadow">
-                <Printer className="w-5 h-5 text-black" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono font-bold text-[#FFE885] uppercase tracking-wider">
-                    Formatos Oficiales en Blanco
-                  </span>
-                  <span className="text-[9px] px-2 py-0.2 rounded-full bg-[#D4AF37]/20 border border-[#D4AF37] text-[#FFE885] font-mono">
-                    PDF Tamaño Carta
-                  </span>
-                </div>
-                <h4 className="text-sm sm:text-base font-black text-white font-serif-luxury truncate">
-                  ¿Prefieres llenar tu formato a mano y enviarlo por paquetería?
-                </h4>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="hidden sm:inline text-xs font-bold text-[#FFE885]">
-                {showBlankPdfBanner ? '▲ Ocultar' : '▼ Descargar PDF'}
-              </span>
-              <div className="w-8 h-8 rounded-lg bg-[#2A2012] border border-[#D4AF37]/50 flex items-center justify-center text-[#FFE885]">
-                {showBlankPdfBanner ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </div>
-            </div>
-          </button>
-
-          {showBlankPdfBanner && (
-            <div className="px-4 pb-5 sm:px-6 pt-2 border-t border-[#D4AF37]/30 space-y-3 animate-fadeIn">
-              <p className="text-xs text-neutral-300 leading-relaxed max-w-2xl">
-                Descarga los formatos PDF oficiales exactos de INBR en blanco, imprímelos en tamaño carta, llénalos con pluma y remítelos por correo o paquetería junto con tu ficha de pago.
-              </p>
-              <div className="flex flex-col sm:flex-row items-center gap-2.5">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => downloadBlankIndividualPdf('F1')}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gold-gradient text-black font-black text-xs hover:brightness-110 active:scale-95 transition-all shadow-lg cursor-pointer"
-                  title="Descargar Formato Individual (F1 / Homologación / Permanente)"
+                  onClick={() => {
+                    setShowBlankPdfBanner((prev) => !prev);
+                    setShowBankInfo(false);
+                  }}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                    showBlankPdfBanner
+                      ? 'bg-gold-gradient text-black border-[#D4AF37] font-black shadow'
+                      : 'bg-[#17130B] border-[#D4AF37]/60 text-[#FFE885] hover:bg-[#241D10]'
+                  }`}
                 >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Formato Individual PDF (F1 / Permanente)</span>
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Formatos en Blanco PDF</span>
+                  {showBlankPdfBanner ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                 </button>
 
-                <button
-                  type="button"
-                  onClick={downloadBlankLitterPdf}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#1E190E] border-2 border-[#D4AF37] text-[#FFE885] font-bold text-xs hover:bg-[#2A2214] active:scale-95 transition-all shadow cursor-pointer"
-                  title="Descargar Formato de Camada (2 Páginas)"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Formato de Camada PDF (2 Pág.)</span>
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ========================================================================= */}
-        {/* NAVEGACIÓN COMPACTA Y RETRÁCTIL DE FORMATOS (DESKTOP & MOBILE)            */}
-        {/* ========================================================================= */}
-        <div className="max-w-4xl mx-auto mb-6 bg-[#120F0A] border-2 border-[#D4AF37] rounded-2xl p-3 sm:p-4 shadow-xl">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gold-gradient text-black flex items-center justify-center font-black shrink-0 shadow">
-                {activeTab === 'f1' && <Award className="w-5 h-5 text-black" />}
-                {activeTab === 'permanent' && <BadgeCheck className="w-5 h-5 text-black" />}
-                {activeTab === 'homologation' && <ArrowRightLeft className="w-5 h-5 text-black" />}
-                {activeTab === 'litter' && <Baby className="w-5 h-5 text-black" />}
-                {activeTab === 'genogram' && <GitBranch className="w-5 h-5 text-black" />}
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono text-[#D4AF37] uppercase font-bold block leading-none">
-                    Trámite Activo:
-                  </span>
-                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-[#2A2012] border border-[#D4AF37]/40 text-[#FFE885] font-mono font-bold">
-                    Oficial INBR
-                  </span>
-                </div>
-                <span className="text-xs sm:text-base font-black text-white truncate block font-serif-luxury mt-0.5">
-                  {activeTab === 'f1' && '1. Aplicación F1 (Registro Inicial Base)'}
-                  {activeTab === 'permanent' && '2. Registro Permanente (Homologación Definitiva)'}
-                  {activeTab === 'homologation' && '3. Homologación (Otras Federaciones)'}
-                  {activeTab === 'litter' && '4. Registro Oficial de Camada'}
-                  {activeTab === 'genogram' && '5. Genograma (Árbol 4 Generaciones)'}
-                </span>
+                {activeTab !== 'genogram' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowBankInfo((prev) => !prev);
+                      setShowBlankPdfBanner(false);
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      showBankInfo
+                        ? 'bg-gold-gradient text-black border-[#D4AF37] font-black shadow'
+                        : 'bg-[#17130B] border-[#D4AF37]/60 text-[#FFE885] hover:bg-[#241D10]'
+                    }`}
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    <span>Cuentas BBVA / OXXO</span>
+                    {showBankInfo ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
+                )}
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setMobileTabMenuOpen(!mobileTabMenuOpen)}
-              className="flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-gold-gradient text-black font-black text-xs sm:text-sm shadow-md hover:brightness-110 active:scale-95 transition-all cursor-pointer shrink-0"
-              title="Cambiar formato de registro o seleccionar otro trámite"
-            >
-              <MoreVertical className="w-4 h-4 text-black" />
-              <span>Cambiar Formato (5)</span>
-              <ChevronDown className={`w-4 h-4 text-black transition-transform ${mobileTabMenuOpen ? 'rotate-180' : ''}`} />
-            </button>
-          </div>
-
-          {mobileTabMenuOpen && (
-            <div className="mt-3 pt-3 border-t border-[#D4AF37]/30 space-y-2 animate-fadeIn">
-              <span className="text-[10px] font-mono uppercase text-[#D4AF37] font-bold block mb-1 px-1">
-                Selecciona el Formato Oficial a Trabajar:
-              </span>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {[
-                  { id: 'f1', label: '1. Aplicación F1 (Inicial)', icon: Award, desc: 'Perros base sin ascendencia' },
-                  { id: 'permanent', label: '2. Registro Permanente (Oficial)', icon: BadgeCheck, desc: 'Para ejemplares con padres registrados' },
-                  { id: 'homologation', label: '3. Homologación (Otros Clubes)', icon: ArrowRightLeft, desc: 'Validar pedigrí de otras federaciones' },
-                  { id: 'litter', label: '4. Registro de Camada', icon: Baby, desc: 'Carga de camadas y cachorros' },
-                  { id: 'genogram', label: '5. Genograma (4 Generaciones)', icon: GitBranch, desc: 'Árbol genealógico interactivo' },
-                ].map((item) => {
-                  const Icon = item.icon;
-                  const isAct = activeTab === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => {
-                        setActiveTab(item.id as any);
-                        setMobileTabMenuOpen(false);
-                      }}
-                      className={`flex items-center justify-between p-3 rounded-xl text-left transition-all cursor-pointer ${
-                        isAct
-                          ? 'bg-gold-gradient text-black font-black shadow-lg scale-102'
-                          : 'text-neutral-200 hover:text-white bg-black/70 hover:bg-[#1E190E] border border-neutral-800 hover:border-[#D4AF37]/50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <Icon className={`w-4 h-4 shrink-0 ${isAct ? 'text-black' : 'text-[#D4AF37]'}`} />
-                        <div className="min-w-0">
-                          <span className="text-xs block font-bold truncate">{item.label}</span>
-                          <span className={`text-[10px] block truncate ${isAct ? 'text-black/80' : 'text-neutral-400'}`}>
-                            {item.desc}
-                          </span>
-                        </div>
-                      </div>
-                      {isAct && <CheckCircle2 className="w-4 h-4 text-black shrink-0 ml-2" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ========================================================================= */}
-        {/* RECUADRO OFICIAL DE TRANSFERENCIA BANCARIA INBR - RETRÁCTIL              */}
-        {/* ========================================================================= */}
-        {activeTab !== 'genogram' && (
-          <div className="max-w-4xl mx-auto mb-8 rounded-2xl bg-gradient-to-r from-[#1E170C] via-[#14120D] to-[#1E170C] border-2 border-[#D4AF37] shadow-xl overflow-hidden transition-all">
-            <button
-              type="button"
-              onClick={() => setShowBankInfo(!showBankInfo)}
-              className="w-full p-3.5 sm:p-5 flex items-center justify-between gap-3 text-left hover:bg-[#251D0F]/50 transition-colors cursor-pointer"
-              aria-expanded={showBankInfo}
-              title={showBankInfo ? 'Ocultar datos bancarios' : 'Ver datos de transferencia bancaria'}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-xl bg-gold-gradient text-black flex items-center justify-center font-bold shrink-0 shadow">
-                  <CreditCard className="w-5 h-5 text-black" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-mono font-bold text-[#FFE885] uppercase tracking-wider">
-                      Cuentas y Pagos Oficiales
-                    </span>
-                    <span className="text-[9px] px-2 py-0.2 rounded-full bg-emerald-950/80 border border-emerald-500 text-emerald-300 font-mono font-bold">
-                      BBVA / OXXO
-                    </span>
-                  </div>
-                  <h4 className="text-sm sm:text-base font-bold text-white font-serif-luxury truncate">
-                    Datos de Transferencia Bancaria y Depósito INBR
-                  </h4>
+            {/* Cajón opcional: Formatos PDF en Blanco */}
+            {showBlankPdfBanner && (
+              <div className="p-4 sm:p-5 rounded-2xl bg-[#16120B] border border-[#D4AF37] space-y-3 animate-fadeIn">
+                <p className="text-xs text-neutral-300 leading-relaxed">
+                  Descarga los formatos PDF oficiales INBR en blanco, imprímelos en tamaño carta y envíalos junto con tu ficha de pago.
+                </p>
+                <div className="flex flex-col sm:flex-row items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => downloadBlankIndividualPdf('F1')}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-gold-gradient text-black font-black text-xs hover:brightness-110 transition-all shadow cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Formato Individual PDF (F1 / Permanente)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={downloadBlankLitterPdf}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#1E190E] border border-[#D4AF37] text-[#FFE885] font-bold text-xs hover:bg-[#2A2214] transition-all shadow cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Formato de Camada PDF (2 Pág.)</span>
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="hidden sm:inline text-xs font-bold text-[#FFE885]">
-                  {showBankInfo ? '▲ Ocultar Cuentas' : '▼ Ver Cuentas de Pago'}
-                </span>
-                <div className="w-8 h-8 rounded-lg bg-[#2A2012] border border-[#D4AF37]/50 flex items-center justify-center text-[#FFE885]">
-                  {showBankInfo ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </div>
-              </div>
-            </button>
+            )}
 
-            {showBankInfo && (
-              <div className="px-4 pb-5 sm:px-6 pt-2 border-t border-[#D4AF37]/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fadeIn">
+            {/* Cajón opcional: Datos Bancarios */}
+            {showBankInfo && activeTab !== 'genogram' && (
+              <div className="p-4 sm:p-5 rounded-2xl bg-[#16120B] border border-[#D4AF37] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fadeIn">
                 <div className="text-xs text-neutral-300 leading-relaxed space-y-1">
-                  <p>Realiza tu pago en ventanilla bancaria, transferencia electrónica SPEI o tiendas OXXO autorizadas.</p>
-                  <p className="text-[#FFE885] font-semibold">Adjunta tu comprobante o captura de pantalla al final del formulario.</p>
+                  <p>Realiza tu pago en ventanilla bancaria, transferencia SPEI o tiendas OXXO.</p>
+                  <p className="text-[#FFE885] font-semibold">Adjunta tu comprobante al final del formulario.</p>
                 </div>
                 <div className="text-left sm:text-right text-xs space-y-1 bg-black/70 p-3 rounded-xl border border-neutral-800 shrink-0 w-full sm:w-auto">
                   <div>Banco: <strong className="text-white">BBVA México</strong></div>
@@ -856,8 +728,37 @@ export const FormsAndGenogramSection: React.FC<FormsAndGenogramSectionProps> = (
                 </div>
               </div>
             )}
-          </div>
-        )}
+
+            {/* BARRA DIRECTA DE 5 TRÁMITES (1 CLIC, SIN MENÚ DESPLEGABLE INTERMEDIO) */}
+            <div className="bg-[#120F0A] border-2 border-[#D4AF37]/80 rounded-2xl p-1.5 shadow-xl overflow-x-auto">
+              <div className="flex items-center gap-1.5 min-w-max sm:grid sm:grid-cols-5">
+                {[
+                  { id: 'f1', label: '1. Aplicación F1', icon: Award },
+                  { id: 'permanent', label: '2. Permanente', icon: BadgeCheck },
+                  { id: 'homologation', label: '3. Homologación', icon: ArrowRightLeft },
+                  { id: 'litter', label: '4. Camada', icon: Baby },
+                  { id: 'genogram', label: '5. Genograma 4G', icon: GitBranch },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  const isAct = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setActiveTab(item.id as any)}
+                      className={`flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        isAct
+                          ? 'bg-gold-gradient text-black font-black shadow-lg'
+                          : 'text-neutral-300 hover:text-white hover:bg-[#1E190E]'
+                      }`}
+                    >
+                      <Icon className={`w-4 h-4 shrink-0 ${isAct ? 'text-black' : 'text-[#D4AF37]'}`} />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
         {/* ========================================================================= */}
         {/* 1. FORMULARIO F1 INICIAL (SOLO INFO DE ARRIBA, SIN PAPÁS NI ASCENDENCIA)    */}
@@ -2684,7 +2585,7 @@ export const FormsAndGenogramSection: React.FC<FormsAndGenogramSectionProps> = (
 
             {genogramSubTab === 'consult' ? (
               <>
-                {/* BUSCADOR EXCLUSIVO POR NÚMERO DE REGISTRO */}
+                {/* BUSCADOR EXCLUSIVO POR NÚMERO DE REGISTRO O MICROCHIP */}
                 <div className="max-w-2xl mx-auto mb-10">
                   <form onSubmit={handleSearchGenogram} className="flex flex-col sm:flex-row gap-3">
                     <div className="relative flex-1">
@@ -2693,16 +2594,21 @@ export const FormsAndGenogramSection: React.FC<FormsAndGenogramSectionProps> = (
                         type="text"
                         value={searchRegInput}
                         onChange={(e) => setSearchRegInput(e.target.value)}
-                        placeholder="Ingresa el N° de Registro oficial..."
+                        placeholder="Ingresa el N° de Registro o Microchip..."
                         className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-[#080808] border-2 border-[#D4AF37]/50 text-white font-mono text-xs sm:text-sm placeholder-neutral-500 focus:outline-none focus:border-[#FFE885] shadow-inner"
                       />
                     </div>
                     <button
                       type="submit"
-                      className="px-6 py-3.5 rounded-2xl font-black text-xs sm:text-sm text-black bg-gold-gradient hover:brightness-110 active:scale-95 hover:scale-105 transition-all shadow-xl shrink-0 flex items-center justify-center gap-2 cursor-pointer"
+                      disabled={isSearchingGenogram}
+                      className="px-6 py-3.5 rounded-2xl font-black text-xs sm:text-sm text-black bg-gold-gradient hover:brightness-110 active:scale-95 hover:scale-105 transition-all shadow-xl shrink-0 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
                     >
-                      <Search className="w-4 h-4" />
-                      <span>Consultar Pedigrí (4 Gen)</span>
+                      {isSearchingGenogram ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Search className="w-4 h-4" />
+                      )}
+                      <span>{isSearchingGenogram ? 'Buscando...' : 'Consultar Pedigrí (4 Gen)'}</span>
                     </button>
                   </form>
                 </div>

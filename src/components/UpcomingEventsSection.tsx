@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from '../context/LanguageContext';
 import { useDynamicContent } from '../utils/dynamicContent';
+import { BREED_IMAGES } from '../utils/breedImages';
 import { UPCOMING_EVENTS } from '../data/registryData';
 import { Calendar, MapPin, Award, UserCheck, Trophy, Sparkles, CheckCircle2, ArrowLeft } from 'lucide-react';
 
@@ -12,7 +13,7 @@ export const UpcomingEventsSection: React.FC<UpcomingEventsSectionProps> = ({ on
   const { t } = useTranslation();
   const { content } = useDynamicContent();
 
-  const bannerUrl = content.eventsBannerUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=1200&q=80';
+  const bannerUrl = content.eventsBannerUrl || BREED_IMAGES.heroBanner;
 
   return (
     <section id="eventos" className="py-20 bg-[#0A0A0A] relative">
@@ -62,6 +63,7 @@ export const UpcomingEventsSection: React.FC<UpcomingEventsSectionProps> = ({ on
             <img
               src={bannerUrl}
               alt="Póster de Circuitos INBR"
+              referrerPolicy="no-referrer"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />

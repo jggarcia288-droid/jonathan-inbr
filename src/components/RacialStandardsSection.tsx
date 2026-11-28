@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from '../context/LanguageContext';
 import { useDynamicContent } from '../utils/dynamicContent';
+import { BREED_IMAGES } from '../utils/breedImages';
 import { 
   BookOpen, 
   FileText, 
@@ -39,7 +40,7 @@ const DEFAULT_STANDARDS: Record<string, BreedStandardDetail> = {
     id: 'american-bully',
     name: 'American Bully',
     category: 'Raza Tipo Bull',
-    image: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=800&q=80',
+    image: BREED_IMAGES.americanBully,
     summary: 'El American Bully debe transmitir una gran fuerza para su tamaño. Es un perro de cuerpo compacto, mediano a grande, con una cabeza pesada y esculpida, cuerpo musculoso y estructura ósea robusta.',
     head: 'Longitud media, cráneo ancho, músculos de las mejillas muy pronunciados, stop definido y orejas de inserción alta.',
     bite: 'Mordida en tijera perfecta o en tijera invertida / leve prognatismo sin dientes visibles con la boca cerrada.',
@@ -50,11 +51,11 @@ const DEFAULT_STANDARDS: Record<string, BreedStandardDetail> = {
     pdfFileName: 'Estandar_Oficial_American_Bully_INBR_2026.pdf',
     pdfUpdatedAt: '2026-01-15',
   },
-  'exotic-bully': {
-    id: 'exotic-bully',
-    name: 'Exotic Bully',
+  'exotic-bull': {
+    id: 'exotic-bull',
+    name: 'Exotic Bull',
     category: 'Edición Especial',
-    image: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=800&q=80',
+    image: BREED_IMAGES.exoticBull,
     summary: 'Extrema compactación, cabeza braquicéfala con stop a 90 grados, manteniendo la capacidad de respiración limpia y libre de claudicación.',
     head: 'Cráneo masivo y cúbico, hocico corto pero con orificios nasales completamente despejados, mandíbula ancha.',
     bite: 'Ligero prognatismo tolerado. La mandíbula inferior debe ser ancha y cuadrada.',
@@ -62,14 +63,44 @@ const DEFAULT_STANDARDS: Record<string, BreedStandardDetail> = {
     body: 'Cuerpo ultra compacto, distancia cruz-cola casi igual a la altura a la cruz, musculatura hipertrofiada.',
     limbs: 'Huesos extremadamente densos, aplomos rectos con tolerancia a ligero desvío no claudicante.',
     faults: 'Falta total de fosas nasales abiertas (estenosis severa), ceguera, agresividad o timidez extrema.',
-    pdfFileName: 'Estandar_Oficial_Exotic_Bully_INBR_2026.pdf',
+    pdfFileName: 'Estandar_Oficial_Exotic_Bull_INBR_2026.pdf',
     pdfUpdatedAt: '2026-02-01',
+  },
+  'french-bulldog': {
+    id: 'french-bulldog',
+    name: 'French Bulldog',
+    category: 'Compañía & Molosoide',
+    image: BREED_IMAGES.frenchBulldog,
+    summary: 'Pequeño molosoide fornido, compacto y de hueso sólido. Orejas de murciélago erectas y cola naturalmente corta.',
+    head: 'Fuerte, ancha y cuadrada; la piel de la cabeza forma pliegues y arrugas simétricas sin obstruir los ojos.',
+    bite: 'Mandíbula inferior prominente (prognatismo moderado) que sobrepasa a la superior con curvatura hacia arriba.',
+    neck: 'Corto, ligeramente arqueado, sin papada excesiva.',
+    body: 'Línea dorsal que se eleva progresivamente hasta el lomo para descender hacia la cola (roach back).',
+    limbs: 'Patas traseras ligeramente más largas que las delanteras elevando la grupa.',
+    faults: 'Orejas no erectas, cola amputada artificialmente, ojos no visibles o con entropión.',
+    pdfFileName: 'Estandar_Oficial_French_Bulldog_INBR_2026.pdf',
+    pdfUpdatedAt: '2026-01-25',
+  },
+  'english-bulldog': {
+    id: 'english-bulldog',
+    name: 'English Bulldog',
+    category: 'Raza Tipo Bull',
+    image: BREED_IMAGES.englishBulldog,
+    summary: 'Moloso de talla media, pelo corto, compacto y de estructura baja con hombros anchos, cabeza masiva y marcha firme.',
+    head: 'Cráneo muy grande y ancho frente a su alzada, con frente plana, stop marcado y orejas pequeñas en forma de rosa.',
+    bite: 'Mandíbula inferior ancha, cuadrada y en prognatismo moderado, bien alineada.',
+    neck: 'Corto, muy grueso, profundo y fuerte, bien arqueado en la nuca.',
+    body: 'Pecho amplio y redondo, costillas bien arqueadas y dorso corto y fuerte, más alto en el lomo que en los hombros.',
+    limbs: 'Miembros anteriores muy sólidos, musculosos y rectos; posteriores fuertes y musculosos.',
+    faults: 'Dificultad respiratoria audible en reposo, orejas erectas o ausencia de tipicidad facial.',
+    pdfFileName: 'Estandar_Oficial_English_Bulldog_INBR_2026.pdf',
+    pdfUpdatedAt: '2026-02-05',
   },
   'cane-corso': {
     id: 'cane-corso',
     name: 'Cane Corso Italiano',
     category: 'Moloso de Guardia',
-    image: 'https://images.unsplash.com/photo-1568572933382-74d440642117?auto=format&fit=crop&w=800&q=80',
+    image: BREED_IMAGES.caneCorso,
     summary: 'Moloso mediano a grande, atlético, distinguido y potente. Estructura compacta, elegante y robusta, con trote elástico y gran nobleza.',
     head: 'Braquicefálica, cráneo ancho, eje longitudinal ligeramente convergente, stop bien marcado.',
     bite: 'Ligero prognatismo (no mayor a 5 mm). Mordida en pinza tolerada pero no deseada.',
@@ -80,11 +111,26 @@ const DEFAULT_STANDARDS: Record<string, BreedStandardDetail> = {
     pdfFileName: 'Estandar_Oficial_Cane_Corso_INBR_2026.pdf',
     pdfUpdatedAt: '2026-01-20',
   },
+  'pastor-aleman': {
+    id: 'pastor-aleman',
+    name: 'Pastor Alemán',
+    category: 'Trabajo & K9',
+    image: BREED_IMAGES.pastorAleman,
+    summary: 'Perro de talla mediana a grande, ligeramente alargado, musculoso y seco, dotado de gran firmeza nerviosa, seguridad e instinto de guarda y trabajo.',
+    head: 'En forma de cuña proporcionada al cuerpo, frente ligeramente convexa, stop moderado y orejas triangulares erectas hacia adelante.',
+    bite: 'Mordida en tijera fuerte, sana y completa de 42 piezas dentales.',
+    neck: 'Fuerte, bien musculado, sin piel flácida ni papada, formando un ángulo cercano a 45°.',
+    body: 'Cruz alta y prolongada, dorso recto, firme y muy musculado hacia la grupa suavemente inclinada.',
+    limbs: 'Escápula larga e inclinada, miembros anteriores rectos, posteriores bien angulados para un trote amplio de gran alcance.',
+    faults: 'Orejas caídas o blandas, falta de firmeza de carácter, prognatismo o enognatismo.',
+    pdfFileName: 'Estandar_Oficial_Pastor_Aleman_INBR_2026.pdf',
+    pdfUpdatedAt: '2026-02-12',
+  },
   'pastor-belga-malinois': {
     id: 'pastor-belga-malinois',
     name: 'Pastor Belga Malinois',
     category: 'Trabajo & K9',
-    image: 'https://images.unsplash.com/photo-1588943211346-090881b5782a?auto=format&fit=crop&w=800&q=80',
+    image: BREED_IMAGES.pastorBelgaMalinois,
     summary: 'Canino mediolíneo armónico, ágil, rústico, habituado a la vida al aire libre y con facultades de trabajo deportivo K9 excepcionales.',
     head: 'Cincelada, larga pero no exagerada, máscara negra bien definida, ojos almendrados color castaño oscuro.',
     bite: 'Mordida en tijera completa de 42 piezas dentales. Pinza tolerada en caninos de trabajo.',
@@ -95,20 +141,50 @@ const DEFAULT_STANDARDS: Record<string, BreedStandardDetail> = {
     pdfFileName: 'Estandar_Oficial_Malinois_K9_INBR_2026.pdf',
     pdfUpdatedAt: '2026-02-10',
   },
-  'french-bulldog': {
-    id: 'french-bulldog',
-    name: 'French Bulldog',
-    category: 'Compañía & Molosoide',
-    image: 'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?auto=format&fit=crop&w=800&q=80',
-    summary: 'Pequeño molosoide fornido, compacto y de hueso sólido. Orejas de murciélago erectas y cola naturalmente corta.',
-    head: 'Fuerte, ancha y cuadrada; la piel de la cabeza forma pliegues y arrugas simétricas sin obstruir los ojos.',
-    bite: 'Mandíbula inferior prominente (prognatismo moderado) que sobrepasa a la superior con curvatura hacia arriba.',
-    neck: 'Corto, ligeramente arqueado, sin papada excesiva.',
-    body: 'Línea dorsal que se eleva progresivamente hasta el lomo para descender hacia la cola (roach back).',
-    limbs: 'Patas traseras ligeramente más largas que las delanteras elevando la grupa.',
-    faults: 'Orejas no erectas, cola amputada artificialmente, ojos no visibles o con entropión.',
-    pdfFileName: 'Estandar_Oficial_French_Bulldog_INBR_2026.pdf',
-    pdfUpdatedAt: '2026-01-25',
+  'doberman': {
+    id: 'doberman',
+    name: 'Doberman Pinscher',
+    category: 'Moloso & Guardia',
+    image: BREED_IMAGES.doberman,
+    summary: 'Perro mediano, fuerte y musculoso de líneas elegantes y nobles. Temperamento amigable, firmeza y gran capacidad de guarda y compañía.',
+    head: 'En forma de cuña obtusa vista desde arriba y de perfil, líneas superiores paralelas, trufa bien desarrollada y ojos oscuros.',
+    bite: 'Mordida en tijera fuerte y completa con 42 piezas.',
+    neck: 'De buena longitud, seco, musculoso y con porte erguido y elegante.',
+    body: 'Cuerpo cuadrado, cruz bien pronunciada, dorso corto y firme, pecho amplio y vientre recogido.',
+    limbs: 'Extremidades rectas, hueso sólido, corvejones paralelos y trote elástico con gran cobertura de terreno.',
+    faults: 'Timidez, agresividad descontrolada, manchas blancas extensas o dentadura incompleta severa.',
+    pdfFileName: 'Estandar_Oficial_Doberman_INBR_2026.pdf',
+    pdfUpdatedAt: '2026-02-14',
+  },
+  'rottweiler': {
+    id: 'rottweiler',
+    name: 'Rottweiler',
+    category: 'Moloso & Guardia',
+    image: BREED_IMAGES.rottweiler,
+    summary: 'Perro robusto, mediano a grande, ni pesado ni ligero, ni alto de patas ni agalgado. Proporciones armoniosas que denotan gran fuerza, agilidad y resistencia.',
+    head: 'Longitud media, ancha entre las orejas, stop bien marcado, pómulos arqueados y marcas fuego bien delimitadas.',
+    bite: 'Mordida en tijera fuerte y completa (42 piezas).',
+    neck: 'Fuerte, moderadamente largo, bien musculado, ligeramente arqueado y sin papada.',
+    body: 'Dorso recto, fuerte y firme; pecho ancho y profundo con costillas bien arqueadas.',
+    limbs: 'Hueso denso y aplomos firmes, muslos anchos y musculosísimos, corvejones angulados sin debilidad.',
+    faults: 'Prognatismo, enognatismo, ojos claros amarillos o falta de equilibrio temperamental.',
+    pdfFileName: 'Estandar_Oficial_Rottweiler_INBR_2026.pdf',
+    pdfUpdatedAt: '2026-02-15',
+  },
+  'american-pit-bull': {
+    id: 'american-pit-bull',
+    name: 'American Pit Bull Terrier',
+    category: 'Raza Tipo Bull',
+    image: BREED_IMAGES.apbt,
+    summary: 'Atleta canino de talla media, pelaje corto y musculatura definida. Combina fuerza, agilidad, resistencia y gran nobleza con las personas.',
+    head: 'Longitud media en forma de cuña ancha, cráneo plano entre las orejas, mejillas prominentes libres de arrugas.',
+    bite: 'Mordida en tijera apretada y completa.',
+    neck: 'Musculoso, seco y ligeramente arqueado hasta hombros anchos y bien inclinados.',
+    body: 'Costillas profundas y bien arqueadas hacia atrás, lomo corto y fuerte, nunca pesado.',
+    limbs: 'Huesos redondos y fuertes sin pesadez excesiva, cuartillas firmes y gran propulsión trasera.',
+    faults: 'Peso excesivo o falta de tonicidad atlética, cola enroscada o displasia evidente.',
+    pdfFileName: 'Estandar_Oficial_APBT_INBR_2026.pdf',
+    pdfUpdatedAt: '2026-02-16',
   },
 };
 
@@ -132,7 +208,12 @@ export const RacialStandardsSection: React.FC<RacialStandardsSectionProps> = ({
   const [adminNewPdfName, setAdminNewPdfName] = useState('');
   const [adminSuccessMsg, setAdminSuccessMsg] = useState<string | null>(null);
 
-  const currentStandard = standards[selectedBreedId] || standards['american-bully'];
+  const normalizedKey = selectedBreedId === 'exotic-bully' ? 'exotic-bull' : selectedBreedId;
+  const baseStandard = standards[normalizedKey] || standards['american-bully'];
+  const cmsBreedMatch = (content.bullBreedsList || []).find((b) => b.id === baseStandard.id);
+  const currentStandard = cmsBreedMatch?.image
+    ? { ...baseStandard, image: cmsBreedMatch.image, name: cmsBreedMatch.name || baseStandard.name }
+    : baseStandard;
 
   // Handle client/associate PDF download
   const handleDownloadPdf = (standard: BreedStandardDetail) => {
@@ -287,6 +368,7 @@ DOCUMENTO NOTARIADO Y REGISTRADO ANTE EL COMITÉ MORFOLÓGICO INTERNACIONAL INBR
                 <img
                   src={currentStandard.image}
                   alt={currentStandard.name}
+                  referrerPolicy="no-referrer"
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
                 <span className="absolute top-3 left-3 px-2.5 py-1 rounded-md bg-black/80 text-[#FFE885] border border-[#D4AF37]/50 text-[10px] font-mono font-bold">
